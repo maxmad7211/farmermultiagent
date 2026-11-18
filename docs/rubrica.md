@@ -54,7 +54,7 @@ Número y texto por confirmar con la rúbrica oficial.
 | Definición del problema, escenario y supuestos | `Propuesta.pdf` pp. 1–3; [`modelo.md` §2–3](modelo.md#2-escala-de-tiempo-y-espacio); `siembra/campo.py`, `config.derivados` | Listo |
 | Diseño del agente: percepciones, acciones, tipo de agente, arquitectura híbrida, máquina de estados | `Propuesta.pdf` pp. 4–5; [`modelo.md` §4 y §9](modelo.md#9-estados-del-tractor-d14); `agentes.Tractor` (`decidir`, `actuar`), `modelo.ModeloSiembra._resolver` (capa reactiva) | Listo |
 | Comunicación y coordinación: Contract Net, estigmergia, blackboard, broadcast | [`modelo.md` §7](modelo.md#7-mecanismos-de-coordinación); `comunicacion.Bus`, `agentes.Gestor`, `planificador.TablaReservas`; `mensajes.csv` de las corridas detalladas | Listo |
-| Algoritmos: A* con costos por tipo de celda, Cooperative A* con ventana, cobertura en zigzag | `planificador.astar`, `planificador.whca`, `planificador.DistanciaReal` (Reverse Resumable A*), `campo.PESO`, `campo.PESO_CRUCE` | Parcial: falta la prueba sobre mapas con ruta óptima conocida |
+| Algoritmos: A* con costos por tipo de celda, Cooperative A* con ventana, cobertura en zigzag | `planificador.astar`, `planificador.whca`, `planificador.DistanciaReal` (Reverse Resumable A*), `campo.PESO`, `campo.PESO_CRUCE`; `tests/test_planificador.py` (rutas calculadas a mano y contra Dijkstra en 30 mapas aleatorios) | Listo |
 | Métricas y función de costo | `metricas.costos`, `metricas.agregar_costos`; [`contrato_datos.md`](contrato_datos.md#función-de-costo-metricascostosresumen-cfg---dict); `tests/test_metricas.py` | Listo |
 | Diseño experimental: barrido, escenarios, 20 semillas, IC del 95 %, pruebas pareadas | `experimentos.py`; `metricas.resumen_ic`, `metricas.prueba_pareada`; `tests/test_experimentos.py` | Parcial: código listo; faltan las corridas del modo completo |
 | (6) Visualización 2D, animaciones y dashboards | `viz.py` (tabla de abajo), `notebooks/dashboard.ipynb`, `resultados/dashboard.html`, `resultados/figuras/` (36 figuras y la animación) | Listo |
@@ -90,7 +90,7 @@ Paneles que prometió la propuesta (pp. 16–17) y la función de `siembra/viz.p
 
 | Habilidad | Cómo dijimos que la demostraríamos | Evidencia | Estado |
 |---|---|---|---|
-| A* con costos variables por tipo de celda (implementación algorítmica) | Pruebas sobre mapas con ruta óptima conocida | `planificador.astar`, `campo.PESO` | Parcial: falta la prueba |
+| A* con costos variables por tipo de celda (implementación algorítmica) | Pruebas sobre mapas con ruta óptima conocida | `planificador.astar`, `campo.PESO`, `tests/test_planificador.py` | Listo |
 | Cobertura boustrophedon con N agentes (implementación algorítmica) | Gráfica de porcentaje cubierto contra tiempo | `curvas.csv`, `viz.curvas_cobertura` | Parcial: faltan las corridas |
 | Contract Net y estigmergia contra franjas fijas (modelado matemático) | 20 semillas, IC y conteo de mensajes | `experimentos.py`, `metricas.prueba_pareada`, columnas `msg_*` | Parcial: faltan las corridas |
 | Esquema de mensajes versionado con checksum (arquitectura de software) | Log validado al cargar en Unity | `telemetria.exportar_unity`, `telemetria.validar_unity`, `tests/test_telemetria.py` | Listo del lado de Python; Unity fuera de alcance |
