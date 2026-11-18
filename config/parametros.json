@@ -1,0 +1,117 @@
+{
+  "version_parametros": "0.1.0",
+  "semilla": 0,
+  "mecanismo": "M1",
+  "campo": {
+    "hectareas": 20,
+    "celda_m": 10,
+    "deposito_x": null,
+    "n_obstaculos": 0,
+    "obstaculos": []
+  },
+  "flota": {
+    "n_tractores": 2,
+    "n_surcadores": null
+  },
+  "escala_tiempo": {
+    "ancho_trabajo_m": 3.04,
+    "velocidad_kmh": 9.0,
+    "jornada_h": 10,
+    "dias_laborables": 1.0
+  },
+  "agente": {
+    "tolva_ha": 2.0,
+    "tanque_l": 68,
+    "consumo_lh": 10.5,
+    "consumo_ralenti_frac": 0.0,
+    "reserva_diesel_frac": 0.1,
+    "recarga_semilla_min": 15,
+    "recarga_diesel_min": 8,
+    "cambio_implemento_min": 20,
+    "variacion_servicio": 0.2,
+    "paciencia_pasos": 4
+  },
+  "comunicacion": {
+    "perdida_mensajes": 0.0,
+    "retraso_max": 1,
+    "timeout_ofertas": 3,
+    "reintento_cfp": 15,
+    "holgura_tell": 2.0,
+    "oferta_anticipada": true,
+    "valor_hilera": 1000,
+    "costo_celda": 10,
+    "ventana_reservas": 10,
+    "margen_recarga_hileras": 0
+  },
+  "economia": {
+    "precio_tractor": 795000,
+    "temporadas_vida": 20,
+    "vida_h": 12000,
+    "reparacion_frac": 1.0,
+    "precio_diesel": 27,
+    "rendimiento_t_ha": 8.08,
+    "precio_maiz": 6050,
+    "penaliza_colision": 39750,
+    "perdida_no_sembrada_frac": 1.0
+  },
+  "agronomia": {
+    "perdida_dia": 0.004,
+    "ventana_dias": 30
+  },
+  "falla": {
+    "activa": false,
+    "cobertura_disparo": 0.5
+  },
+  "simulacion": {
+    "max_estancado_pasos": 3000,
+    "max_pasos_factor": 12
+  },
+  "_fuentes": {
+    "agente.cambio_implemento_min": "Supuesto: minutos para cambiar surcador por sembradora",
+    "agente.consumo_lh": "ASABE: 0.044 gal por hp de toma de fuerza por hora (Grisso et al., Virginia Tech)",
+    "agente.consumo_ralenti_frac": "Supuesto: 0 = solo se cobra diésel con el tractor en movimiento, igual que H",
+    "agente.paciencia_pasos": "Supuesto de diseño: pasos bloqueado antes de replanear o ceder el paso",
+    "agente.recarga_diesel_min": "Supuesto: minutos para cargar diésel",
+    "agente.recarga_semilla_min": "Supuesto: minutos para llenar la tolva, por confirmar",
+    "agente.reserva_diesel_frac": "Supuesto: diésel de reserva (10 % del tanque) que nunca se planea gastar",
+    "agente.tanque_l": "Supuesto: tanque del John Deere 5075E, por confirmar con ficha técnica",
+    "agente.tolva_ha": "Supuesto: hectáreas que cubre una tolva llena, por confirmar con ficha técnica",
+    "agente.variacion_servicio": "Supuesto: variación aleatoria de +/-20 % en los tiempos de servicio (fuente de variabilidad entre semillas)",
+    "agronomia.perdida_dia": "Bayer: 10 % de pérdida en 26 días después de la fecha óptima",
+    "agronomia.ventana_dias": "Agenda Técnica Agrícola de Nuevo León (INIFAP)",
+    "campo.celda_m": "Propuesta: celda de 10 x 10 m (0.01 ha)",
+    "campo.deposito_x": "Supuesto: depósito al centro de la orilla sur (null = centro)",
+    "campo.hectareas": "Entrada del experimento: tamaño del campo (barrido 10, 20, 40, 80 y 160 ha)",
+    "campo.n_obstaculos": "Propuesta: hasta 2 obstáculos fijos (un poste y un árbol), en posición aleatoria por semilla",
+    "campo.obstaculos": "Opcional: lista explícita de obstáculos {x, y, ancho, alto}; si está vacía se usan n_obstaculos aleatorios",
+    "comunicacion.costo_celda": "Propuesta: ejemplo del grid de clase, caminar una celda cuesta 10",
+    "comunicacion.holgura_tell": "Supuesto de diseño: el gestor espera hasta holgura x (celdas restantes) + 60 pasos el inform de inicio o fin antes de reanunciar",
+    "comunicacion.margen_recarga_hileras": "Propuesta: umbral de recarga anticipada, 0 = semilla justa para la hilera (sensibilidad 0, 1 y 2)",
+    "comunicacion.oferta_anticipada": "Supuesto de diseño: el tractor que está por terminar su hilera puede ganar la siguiente",
+    "comunicacion.perdida_mensajes": "Propuesta: 0 % en el caso base (sensibilidad 0, 10, 20, 30 y 50 %)",
+    "comunicacion.reintento_cfp": "Supuesto de diseño: pasos entre subastas repetidas si hay hileras abiertas y nadie respondió",
+    "comunicacion.retraso_max": "Supuesto: cada mensaje tarda de 0 a retraso_max pasos en llegar",
+    "comunicacion.timeout_ofertas": "Propuesta: 3 pasos (sensibilidad 1, 3, 5 y 10)",
+    "comunicacion.valor_hilera": "Supuesto de diseño: valor fijo de una hilera en la utilidad u = valor - costo_celda x distancia",
+    "comunicacion.ventana_reservas": "Propuesta: 10 pasos (sensibilidad 5, 10 y 20)",
+    "economia.penaliza_colision": "Propuesta: una temporada de propiedad de un tractor",
+    "economia.perdida_no_sembrada_frac": "Supuesto: una celda que no se siembra pierde el 100 % de su cosecha",
+    "economia.precio_diesel": "Profeco, promedio nacional $26.99 (octubre 2026)",
+    "economia.precio_maiz": "Precio piso acordado con SADER (octubre 2025)",
+    "economia.precio_tractor": "Mercado Libre, John Deere 5075E nuevo, Ramos Arizpe (17 nov 2026)",
+    "economia.rendimiento_t_ha": "Promedio nacional de maíz de riego 2025 (SIAP)",
+    "economia.reparacion_frac": "ASABE D497: reparación acumulada = 100 % del precio en 12,000 h",
+    "economia.temporadas_vida": "10 años (Mississippi State University Extension) x 2 ciclos por año",
+    "economia.vida_h": "ASABE D497.7: 12,000 h para tractor de dos ruedas motrices",
+    "escala_tiempo.ancho_trabajo_m": "Supuesto: 4 hileras a 76 cm, por confirmar con ficha de la sembradora",
+    "escala_tiempo.dias_laborables": "ASABE D497 publica días laborables probables; caso base 100 %",
+    "escala_tiempo.jornada_h": "Supuesto, se varía en la sensibilidad (8 a 14 h)",
+    "escala_tiempo.velocidad_kmh": "ASABE D497, sembradora de hileras (6.5 a 11 km/h)",
+    "falla.activa": "Escenario adverso de la propuesta: falla de un tractor a la mitad de la siembra",
+    "falla.cobertura_disparo": "Propuesta: la falla ocurre a la mitad de la siembra (50 % del campo sembrado)",
+    "flota.n_surcadores": "Supuesto: null = max(1, N // 2) surcan y el resto siembra (la propuesta no define el reparto)",
+    "flota.n_tractores": "Entrada del experimento: tamaño de la flota (barrido 1 a 4)",
+    "simulacion.max_estancado_pasos": "Control de la simulación: termina si pasan estos pasos sin surcar ni sembrar ninguna celda",
+    "simulacion.max_pasos_factor": "Control de la simulación: límite de pasos = factor x celdas del campo + 5000"
+  }
+}

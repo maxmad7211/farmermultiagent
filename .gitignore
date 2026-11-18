@@ -1,0 +1,25 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter y pytest
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Corridas detalladas (pasos, mensajes y JSON para Unity): pesan mucho y se regeneran con
+# python correr_todo.py. Los CSV y las figuras de resultados/ sí se versionan porque son
+# pequeños y el dashboard los necesita.
+resultados/corridas/
+# Bitácora de errores de cada ejecución (se le agrega un encabezado aunque no haya errores)
+resultados/errores.log
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+
+# Configuración del editor
+.vscode/
