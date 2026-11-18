@@ -77,7 +77,7 @@ El modo `rapido` sirve para revisar que todo funciona; el modo `completo` es el 
 | Corridas de sensibilidad | 145 | 290 |
 | Corridas detalladas | 8 | 8 |
 | **Total** | **519** | **2,038** |
-| Tiempo medido | <!-- PENDIENTE: tiempos medidos (equipo, núcleos y minutos) --> | <!-- PENDIENTE: tiempos medidos --> |
+| Tiempo medido (Windows 11, Python 3.14, 12 procesos en paralelo) | 1 min 2 s | 6 min 37 s |
 
 El modo rápido no incluye el campo de 160 ha, así que no puede mostrar el cruce de 2 a 4 tractores (que la estimación previa ubica cerca de 170 ha). Para las conclusiones finales hay que usar el modo completo.
 
@@ -110,7 +110,18 @@ python herramientas/construir_dashboard.py --ejecutar --html
 jupyter lab notebooks/dashboard.ipynb
 ```
 
-El primer comando genera `notebooks/dashboard.ipynb` a partir de los CSV de `resultados/`, lo ejecuta y lo exporta a HTML. El notebook nunca tiene números escritos a mano: todas las tablas y gráficas salen de los archivos de resultados. <!-- PENDIENTE: confirmar opciones y ruta del HTML cuando exista herramientas/construir_dashboard.py. -->
+El primer comando genera `notebooks/dashboard.ipynb` a partir de los CSV de `resultados/`, lo ejecuta (unos 2 minutos), guarda las figuras en `resultados/figuras/` y exporta `resultados/dashboard.html`, que se abre en cualquier navegador sin instalar nada. El notebook nunca tiene números escritos a mano: todas las tablas y gráficas salen de los archivos de resultados.
+
+Opciones de `herramientas/construir_dashboard.py`:
+
+| Opción | Qué hace |
+|---|---|
+| (ninguna) | Solo genera el notebook, sin ejecutarlo |
+| `--ejecutar` | Lo ejecuta y guarda sus salidas |
+| `--html` | Además exporta `resultados/dashboard.html` (implica `--ejecutar`) |
+| `--resultados DIR` | Lee los datos de otra carpeta (también se puede usar la variable `SIEMBRA_RESULTADOS`) |
+| `--salida RUTA` | Escribe el notebook en otra ruta |
+| `--timeout S` | Segundos máximos por celda |
 
 ### Pruebas
 
@@ -199,10 +210,10 @@ La escala de tiempo se deriva de los parámetros (`config.derivados`): con 9 km/
 | `escenarios.csv` | Corrida de escenario (+ `escenario`, `escenario_nombre`) | Sí |
 | `curvas.csv` | Punto de la curva de avance de cada corrida de escenario (máximo 200 por corrida) | Sí |
 | `sens_arquitectura.csv` | Corrida de la sensibilidad (+ `parametro`, `valor`) | Sí |
-| `errores.log` | Corrida que falló, con su traceback | Sí |
+| `errores.log` | Corrida que falló, con su traceback | No (bitácora local de cada ejecución) |
 | `corridas/<escenario>_<mecanismo>_s0/` | Corrida detallada: `meta.json`, `pasos.csv`, `mensajes.csv`, `serie.csv`, `celdas.npz`, `unity.json` | No (pesa mucho; se regenera) |
-
-<!-- PENDIENTE: agregar a la tabla la carpeta de figuras PNG y el HTML del dashboard cuando exista herramientas/construir_dashboard.py. -->
+| `figuras/` | 36 figuras PNG del dashboard y la animación `animacion_campo.gif`, para el reporte y la presentación | Sí |
+| `dashboard.html` | El dashboard ejecutado, para verlo sin Python | Sí |
 
 Las corridas detalladas son 8, todas con semilla 0: `normal_20ha_2t` (M0, M1, M2), `falla_20ha_4t` (M0, M1, M2), `normal_40ha_3t_obst` (M2) y `perdida30_20ha_4t` (M1).
 

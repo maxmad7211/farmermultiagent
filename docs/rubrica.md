@@ -21,7 +21,7 @@ Estados: **Listo** (existe y está probado o revisado), **Parcial** (existe la e
 | Situaciones en las que las conclusiones podrían no ser válidas | [§7](analisis_critico.md#7-situaciones-en-las-que-las-conclusiones-no-valen) | Listo |
 | Proponer mejoras técnicamente justificadas | [§8](analisis_critico.md#8-mejoras-propuestas) | Listo |
 | Cuestionar el propio modelo | [Anexo A](analisis_critico.md#anexo-a-revisión-de-la-estimación-previa-de-la-propuesta) (errores de la estimación previa) y las 23 desviaciones de [`modelo.md`](modelo.md#14-resumen-de-desviaciones) | Listo |
-| Sección del dashboard | <!-- PENDIENTE: nombre de la sección del notebook que resume el análisis crítico --> | Pendiente |
+| Sección del dashboard | Panel experimental del notebook (diferencias pareadas, tornado económico, sensibilidad de arquitectura) y tabla de control de calidad de la sección 0, que lista las corridas incompletas o estancadas; el texto interpretativo está en [`analisis_critico.md`](analisis_critico.md) | Listo |
 
 ## Sección 8. Reproducibilidad, documentación y presentación (10 pts)
 
@@ -35,14 +35,14 @@ Estados: **Listo** (existe y está probado o revisado), **Parcial** (existe la e
 | Un archivo de configuración con todos los parámetros y su fuente | `config/parametros.json` (`_fuentes`) | Parcial: 20 parámetros no tienen fuente; la mayoría son variables del experimento, pero `reserva_diesel_frac`, `paciencia_pasos`, `reintento_cfp`, `holgura_tell`, `valor_hilera`, `margen_recarga_hileras`, `perdida_mensajes` y `cobertura_disparo` deberían decir "Propuesta" o "Supuesto" |
 | Semillas aleatorias fijas y listadas | `siembra/experimentos.py` (semillas 0 a N − 1, iguales para los tres mecanismos); fuentes de aleatoriedad en [`modelo.md` §11](modelo.md#11-aleatoriedad-y-reproducibilidad-d18) | Listo |
 | Un comando que corre todo | `correr_todo.py` | Listo |
-| Notebook que regenera tablas y gráficas desde los CSV | `herramientas/construir_dashboard.py`, `notebooks/dashboard.ipynb` | Pendiente |
+| Notebook que regenera tablas y gráficas desde los CSV | `herramientas/construir_dashboard.py`, `notebooks/dashboard.ipynb` (ejecutado con los datos del modo completo), `resultados/dashboard.html` | Listo |
 | Versión del esquema en cada JSON exportado | `siembra.VERSION_ESQUEMA`, `telemetria.exportar_unity`, `telemetria.validar_unity`; `tests/test_telemetria.py` | Listo |
 | Validación de entradas con mensaje claro | `config.validar` (lo llama `simular`); `tests/test_config.py` | Listo |
 | Pruebas automáticas por regla: sin colisiones, sin intercambios, cobertura completa, recargas solo en el depósito, siembra solo sobre surcadas, estados de celda que no retroceden | `tests/test_reglas.py` (con los tres mecanismos; además reproducibilidad con la misma semilla, reasignación tras falla, pérdida de mensajes y obstáculos); `modelo._verificar_seguridad` cuenta colisiones e intercambios en cada corrida | Listo |
 | Contrato de datos entre módulos | [`contrato_datos.md`](contrato_datos.md) | Listo |
 | Descripción del modelo implementado | [`modelo.md`](modelo.md) | Listo |
 | Resultados versionados | `resultados/*.csv` se versionan; `resultados/corridas/` se regenera (`.gitignore`) | Listo |
-| Video de demostración (corrida 2D, dashboard y Unity) | — | Pendiente |
+| Video de demostración (corrida 2D, dashboard y Unity) | — | Fuera de alcance (decisión del equipo) |
 | Presentación | — | Pendiente |
 
 ## Secciones inferidas de la propuesta
@@ -57,14 +57,14 @@ Número y texto por confirmar con la rúbrica oficial.
 | Algoritmos: A* con costos por tipo de celda, Cooperative A* con ventana, cobertura en zigzag | `planificador.astar`, `planificador.whca`, `planificador.DistanciaReal` (Reverse Resumable A*), `campo.PESO`, `campo.PESO_CRUCE` | Parcial: falta la prueba sobre mapas con ruta óptima conocida |
 | Métricas y función de costo | `metricas.costos`, `metricas.agregar_costos`; [`contrato_datos.md`](contrato_datos.md#función-de-costo-metricascostosresumen-cfg---dict); `tests/test_metricas.py` | Listo |
 | Diseño experimental: barrido, escenarios, 20 semillas, IC del 95 %, pruebas pareadas | `experimentos.py`; `metricas.resumen_ic`, `metricas.prueba_pareada`; `tests/test_experimentos.py` | Parcial: código listo; faltan las corridas del modo completo |
-| (6, probable) Resultados experimentales y visualización | `viz.py` (tabla de abajo) y `notebooks/dashboard.ipynb` | Parcial: funciones de gráficas listas; notebook pendiente |
-| Integración con Unity: JSON precalculado, versión de esquema, checksum, validación al cargar | `telemetria.exportar_unity`, `telemetria.validar_unity`, `resultados/corridas/*/unity.json`; `tests/test_telemetria.py` | Parcial: lado de Python listo; el proyecto de Unity no está en este repositorio |
+| (6) Visualización 2D, animaciones y dashboards | `viz.py` (tabla de abajo), `notebooks/dashboard.ipynb`, `resultados/dashboard.html`, `resultados/figuras/` (36 figuras y la animación) | Listo |
+| Integración con Unity: JSON precalculado, versión de esquema, checksum, validación al cargar | `telemetria.exportar_unity`, `telemetria.validar_unity`, `resultados/corridas/*/unity.json`; `tests/test_telemetria.py` | Lado de Python listo (exportación y validación del JSON); el proyecto de Unity quedó fuera de alcance (decisión del equipo) |
 | Ontología y ética (IEEE 1872, 1873, 7007) | `comunicacion.ONTOLOGIA` (`siembra-maiz-v1`) | Pendiente: el mapeo a IEEE 1872 y 7007 sigue en "Pendientes por investigar" de la propuesta |
 | Reflexión con las preguntas de la clase | `Propuesta.pdf` pp. 21–22 | Listo en la propuesta; conviene actualizarla con los resultados |
 
 ### Visualización: panel por panel
 
-Paneles que prometió la propuesta (pp. 16–17) y la función de `siembra/viz.py` que los dibuja. La sección del notebook queda pendiente hasta que exista `notebooks/dashboard.ipynb`.
+Paneles que prometió la propuesta (pp. 16–17) y la función de `siembra/viz.py` que los dibuja. Todas están en `notebooks/dashboard.ipynb`, ordenadas por panel.
 
 | Panel | Elemento | Función | Datos |
 |---|---|---|---|
@@ -93,5 +93,5 @@ Paneles que prometió la propuesta (pp. 16–17) y la función de `siembra/viz.p
 | A* con costos variables por tipo de celda (implementación algorítmica) | Pruebas sobre mapas con ruta óptima conocida | `planificador.astar`, `campo.PESO` | Parcial: falta la prueba |
 | Cobertura boustrophedon con N agentes (implementación algorítmica) | Gráfica de porcentaje cubierto contra tiempo | `curvas.csv`, `viz.curvas_cobertura` | Parcial: faltan las corridas |
 | Contract Net y estigmergia contra franjas fijas (modelado matemático) | 20 semillas, IC y conteo de mensajes | `experimentos.py`, `metricas.prueba_pareada`, columnas `msg_*` | Parcial: faltan las corridas |
-| Esquema de mensajes versionado con checksum (arquitectura de software) | Log validado al cargar en Unity | `telemetria.exportar_unity`, `telemetria.validar_unity`, `tests/test_telemetria.py` | Parcial: falta el lado de Unity |
+| Esquema de mensajes versionado con checksum (arquitectura de software) | Log validado al cargar en Unity | `telemetria.exportar_unity`, `telemetria.validar_unity`, `tests/test_telemetria.py` | Listo del lado de Python; Unity fuera de alcance |
 | Ontología IEEE 1872; combustible y pasadas por celda (ontología y análisis ético) | Telemetría por corrida | `diesel_l`, `diesel_frac`, `celdas["pasadas"]`, `viz.mapa_pasadas` | Parcial: falta el mapeo a la ontología |

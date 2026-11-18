@@ -2,7 +2,7 @@
 
 Este documento interpreta los resultados de la simulación y discute qué se puede concluir de ellos y qué no. Sigue los puntos de la sección 7 de la rúbrica.
 
-Las partes que dependen de los resultados están marcadas con un comentario `PENDIENTE` que dice qué archivo, qué columnas y qué gráfica van ahí. Todo lo demás (la revisión de la propuesta, las limitaciones, la comparación con la realidad y las mejoras) no depende de los números simulados y está completo.
+Los números salen del modo completo: 20 semillas, 1,200 corridas del barrido (10 a 160 ha, 1 a 4 tractores, 3 mecanismos), 540 de escenarios y 290 de sensibilidad de arquitectura. Las tablas completas están en el [anexo B](#anexo-b-tablas-completas-de-resultados-modo-completo-20-semillas) y las gráficas en el dashboard (`notebooks/dashboard.ipynb`, `resultados/figuras/`).
 
 **Cómo leer las comparaciones.** Cada comparación entre mecanismos se reporta con la diferencia promedio, su intervalo de confianza del 95 % y el valor p de la prueba pareada (t pareada, o Wilcoxon si las diferencias no son normales), pareando por `semilla`. Antes de leer un valor p muy bajo, revisar la sección 4.1: la variación entre semillas es pequeña por diseño y una diferencia puede ser estadísticamente significativa sin ser importante en pesos.
 
@@ -23,11 +23,23 @@ H (reparación) y diésel suman unos $394 por ha (≈ 1.12 h de motor por ha con
 
 Hipótesis que salen de la estimación previa recalculada (anexo A): 1 tractor conviene hasta unas 60 ha, 2 tractores entre 60 y 170 ha, y 4 tractores arriba de 170 ha. Con roles fijos, 3 tractores no deberían ganar nunca (sección 4.1).
 
-<!-- PENDIENTE: Tabla de la proporción óptima. Fuente: resultados/barrido.csv del modo completo (el rápido no tiene 160 ha). Usar metricas.optimo_por_campo(barrido): columnas mecanismo, hectareas, n_optimo, media, ic_bajo, ic_alto, en_borde (si en_borde es True el óptimo podría estar arriba de 4 tractores: decirlo). Agregar la diferencia contra el segundo mejor N con metricas.prueba_pareada(barrido, "costo_ha", a=<N óptimo>, b=<segundo mejor N>, col="n_tractores", por=["mecanismo", "hectareas"]) (diferencia_media, ic_bajo, ic_alto, p_t o p_wilcoxon según prueba_sugerida). Gráfica: viz.curvas_costo (costo por hectárea contra número de tractores, una línea por tamaño de campo, con IC). Antes de concluir, excluir o señalar las corridas con estancado = True. -->
+**Resultado.** Número de tractores con el menor costo medio por hectárea (`metricas.optimo_por_campo` sobre `barrido.csv`; gráfica `experimental_curvas_costo.png`). Ninguna de las 1,200 corridas del barrido quedó estancada ni con cobertura menor a 100 %.
 
-<!-- PENDIENTE: ¿Dónde quedan los cruces simulados respecto a 60 ha (1→2) y 170 ha (2→4)? Comparar con eficiencia_campo promedio por hectareas × n_tractores (barrido.csv). Si la eficiencia simulada es mayor que 65 %, los cruces deberían moverse a campos MÁS GRANDES (anexo A.3); si es menor, a campos más chicos. Escribir aquí si los datos lo confirman. -->
+| Campo | M0 | M1 | M2 | Costo en el óptimo (M2) | Sobrecosto del segundo mejor N (M2, pareado) |
+|---|---|---|---|---|---|
+| 10 ha | 1 | 1 | 1 | $4,316/ha | 2 tractores: +$3,798/ha |
+| 20 ha | 1 | 1 | 1 | $2,535/ha | 2 tractores: +$1,797/ha |
+| 40 ha | 1 | 1 | 1 | $1,973/ha | 2 tractores: +$670/ha |
+| 80 ha | 2 | 2 | 2 | $1,787/ha | 1 tractor: +$167/ha (IC 95 % $165 a $168) |
+| 160 ha | 4* | 4* | 3 | $2,103/ha | 4 tractores: +$276/ha |
 
-<!-- PENDIENTE: ¿La proporción óptima depende del mecanismo? Comparar n_optimo entre M0, M1 y M2 para cada hectareas. -->
+\* En el borde del barrido: con M0 y M1 el óptimo de 160 ha podría estar en 5 o más tractores, que no se probaron.
+
+Todas las diferencias contra el segundo mejor N tienen p < 10⁻¹². Son muy grandes en campos chicos (la propiedad domina) y se achican conforme crece el campo: en 80 ha elegir 1 tractor en lugar de 2 cuesta solo $112 a $167 por ha, según el mecanismo. En términos de la pregunta de la propuesta: **una flota dedicada conviene con 1 tractor hasta 40 ha, 2 tractores en 80 ha (0.025 tractores/ha) y 3 o 4 en 160 ha (0.019 a 0.025 tractores/ha)**.
+
+**Dónde quedan los cruces.** El cruce de 1 a 2 tractores cae entre 40 y 80 ha con los tres mecanismos, compatible con las ~60 ha de la estimación previa (el barrido no tiene puntos intermedios para ubicarlo mejor). El cruce de 2 a 4 sí se movió: la estimación lo ponía en 170 ha, así que en 160 ha esperaba 2 tractores, y la simulación da 3 o 4. La razón está en la eficiencia de campo simulada (`eficiencia_campo`): entre 10 y 80 ha queda en 0.63 a 0.73 con 1, 2 o 4 tractores, cerca del 65 % que supone la estimación, y por eso el primer cruce no se mueve; en 160 ha baja a 0.49 a 0.53, porque cada viaje al depósito cruza hasta 126 celdas (casi media hora a 13 s por celda). Con menos eficiencia la siembra tarda más, R pesa más y conviene agregar tractores antes: el cruce se mueve a campos más chicos, como predice el anexo A.3. Ojo: parte de esa baja eficiencia es un artefacto de escala (los traslados están sobreestimados unas 3 veces, sección 5.3), así que el corrimiento del segundo cruce es la conclusión menos firme.
+
+**¿Depende del mecanismo?** No entre 10 y 80 ha: los tres mecanismos eligen el mismo N. Solo en 160 ha difieren (M2 elige 3; M0 y M1, 4), y en esa misma configuración el ranking de mecanismos cambia con N (la gráfica de 160 ha cruza líneas). El mecanismo sí cambia el nivel del costo: en 80 ha con 2 tractores M2 cuesta $1,787/ha contra $1,952 de M0 (−8.5 %), su mayor ventaja en el barrido. En 160 ha con 2 tractores pasa lo contrario: M2 cuesta 21 % más que M0 (sección 4.4).
 
 Alcance de la conclusión: la proporción óptima que salga es válida para una flota **dedicada** a esta siembra (sección 5.1) y con el surcado dentro de la ventana (sección 5.2). Si alguno de esos dos supuestos no se cumple, la respuesta cambia más que con cualquier parámetro económico (sección 3.1).
 
@@ -37,15 +49,17 @@ Criterios de éxito fijados en la propuesta, antes de ver los resultados:
 
 | Pregunta de la propuesta | Comparación | Escenario (`escenarios.csv`) | Métrica (columna) | Criterio de éxito | Resultado | ¿Se cumple? |
 |---|---|---|---|---|---|---|
-| 2. ¿Cuánto reduce Contract Net el ocio y el costo? | M1 contra M0 | `normal_40ha_3t_obst`; barrido con 3 y 4 tractores | `W_ocio_h`, `T_h`, `costo_ha` | `W_ocio_h` ≥ 20 % menor y `T_h` ≥ 5 % menor, p < 0.05 | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
-| 3a. ¿Broadcast y blackboard reducen la espera en la estación? | M2 contra M1 | `tolva_mitad_20ha_4t`, `limite_4t_10ha` | `W_espera_h` | ≥ 30 % menor | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
-| 3b. ¿Cooperative A* reduce los conflictos en cabecera? | M2 contra M1 | Barrido con 3 y 4 tractores; `limite_4t_10ha` | `W_conflicto_h`, `vetos` | Menor que M1 | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
-| 3c. ¿Justifica los mensajes extra? | M2 contra M1 | Todos | `mensajes_total`, `tiempo_computo_s` contra `costo_ha` y `T_h` | Ahorro con IC que no cruza 0 | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
+| 2. ¿Cuánto reduce Contract Net el ocio y el costo? | M1 contra M0 | `normal_40ha_3t_obst`; barrido con 3 y 4 tractores | `W_ocio_h`, `T_h`, `costo_ha` | `W_ocio_h` ≥ 20 % menor y `T_h` ≥ 5 % menor, p < 0.05 | `T_h` +3.6 % en `normal_40ha_3t_obst` (IC +0.4 a +1.2 h, p = 0.001); en el barrido −5 a −7 % solo con 3 tractores en 10 y 20 ha, y +2 a +19 % en el resto. `W_ocio_h` sube de 0 a 0.4–4.5 h. `costo_ha` +0.05 a +15 % | **No.** Contract Net no reduce ni el ocio ni el tiempo (sección 4.3) |
+| 3a. ¿Broadcast y blackboard reducen la espera en la estación? | M2 contra M1 | `tolva_mitad_20ha_4t`, `limite_4t_10ha` | `W_espera_h` | ≥ 30 % menor | −26 % con tolva a la mitad (0.38 → 0.28 h, IC −0.16 a −0.04 h, p = 0.001); −4 % en 10 ha con 4 tractores (p = 0.29) | **Parcial.** Reduce la espera, pero no llega al 30 % y la espera es de minutos |
+| 3b. ¿Cooperative A* reduce los conflictos en cabecera? | M2 contra M1 | Barrido con 3 y 4 tractores; `limite_4t_10ha` | `W_conflicto_h`, `vetos` | Menor que M1 | `W_conflicto_h` −96 a −99.6 % en las 10 combinaciones (p < 0.05); `vetos` de 28–1,459 por corrida a ~0 | **Sí** |
+| 3c. ¿Justifica los mensajes extra? | M2 contra M1 | Todos | `mensajes_total`, `tiempo_computo_s` contra `costo_ha` y `T_h` | Ahorro con IC que no cruza 0 | M2 manda 1 a 24 % **menos** mensajes que M1 en 8 de 9 escenarios (recarga anticipada = menos hileras liberadas y reanunciadas) y es 3 a 25 % más rápido en 8 de 9; su costo es tiempo de cómputo (+48 a +150 %). Excepción: 1 tractor en 160 ha, donde M2 es 26 % más lento y 24 % más caro | **Sí**, salvo con 1 tractor en campos grandes |
 | 3d. Seguridad | Todos | Todas las corridas | `colisiones`, `intercambios` | 0 en todas las corridas | 0 por construcción (sección 4.1) | Sí, pero no discrimina |
-| 4a. Robustez ante falla | M0, M1, M2 | `falla_20ha_4t` | `cobertura`, `n_no_sembradas`, `costo_no_sembrada`, `T_h`, `reanuncios` | M1 y M2 siembran todo lo accesible; M2 con menor `T_h` que M1 | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
-| 4b. Robustez ante pérdida de mensajes | M1, M2 contra M0 | `perdida10_20ha_4t`, `perdida30_20ha_4t` | `reanuncios`, `ofertas_tardias`, `T_h`, `costo_ha` | La ventaja sobre M0 se mantiene con 10 % | <!-- PENDIENTE --> | <!-- PENDIENTE --> |
+| 4a. Robustez ante falla | M0, M1, M2 | `falla_20ha_4t` | `cobertura`, `n_no_sembradas`, `costo_no_sembrada`, `T_h`, `reanuncios` | M1 y M2 siembran todo lo accesible; M2 con menor `T_h` que M1 | M0 siembra 82.5 % (pierde de 7 a 28 % según qué tractor falla) y cuesta $16,742/ha; M1 y M2 siembran todo salvo la celda bajo el tractor descompuesto (~0.6 celdas) y cuestan $8,264 y $8,226/ha. M2 tarda 17 % menos que M1 (8.4 → 7.0 h, p = 0.006) | **Sí** |
+| 4b. Robustez ante pérdida de mensajes | M1, M2 contra M0 | `perdida10_20ha_4t`, `perdida30_20ha_4t` | `reanuncios`, `ofertas_tardias`, `T_h`, `costo_ha` | La ventaja sobre M0 se mantiene con 10 % | Con 10 %: M1 +27 % de `T_h` (IC +1.6 a +2.2 h) y M2 +17 % (IC +0.7 a +1.7 h) contra M0. Con 30 %: +127 % y +110 %. `costo_ha` sube 0.6 a 3.3 % | **No.** Con 10 % de pérdida M0 ya es el más rápido |
 
-<!-- PENDIENTE: Llenar la tabla con metricas.prueba_pareada(escenarios, <métrica>, a="M0" o "M1", b="M1" o "M2", por="escenario") y, para las preguntas 2 y 3b, con barrido.csv filtrado a n_tractores 3 y 4 (por=["hectareas", "n_tractores"]). Con 2 tractores M0 y M1 casi no difieren (sección 4.1). El % de reducción es diferencia_media ÷ media_a. Si se recalculan costos de escenarios.csv, usar metricas.agregar_costos(df, cfg, escala_de_fila=True) para respetar los días laborables de limite_1t_160ha_lluvia. Gráficas: viz.barras_escenarios y viz.diferencias_pareadas (panel experimental). -->
+Las pruebas son pareadas por semilla (`metricas.prueba_pareada`); los porcentajes son la diferencia media entre la media del mecanismo de referencia. Gráficas: `experimental_escenarios_*.png` y `experimental_diferencias_*.png`.
+
+**Resumen de la sección.** M2 cumple lo que prometía la arquitectura: elimina los conflictos en cabecera, recupera la falla más rápido que M1 y es el más rápido en 8 de 9 escenarios y en 14 de 20 combinaciones del barrido. Las excepciones son 40 y 160 ha, sección 4.3. M1 no cumple su criterio: Contract Net con utilidad basada solo en la distancia reparte peor que las franjas fijas. Ninguno de los dos aguanta pérdida de mensajes: con 10 % ya conviene M0, que no se comunica. En pesos las diferencias son pequeñas, porque la propiedad domina el costo (sección 2.1), salvo con falla, donde la diferencia es de 2 a 1.
 
 ---
 
@@ -65,7 +79,19 @@ La parte de R en el costo por hectárea (propiedad + R, estimación previa) dice
 
 Consecuencia para leer los resultados: en el escenario `limite_4t_10ha`, aunque M2 redujera R a la mitad, el costo por hectárea bajaría unos $14 de $15,927. Lo mismo pasa con los escenarios adversos y la sensibilidad de arquitectura, que usan 20 ha con 4 tractores: ahí R es cerca del 1 % del costo. En esos casos la comparación entre mecanismos se tiene que hacer con `T_h`, `W_*_h` y mensajes, no con `costo_ha`. Las diferencias de costo entre mecanismos solo pueden ser grandes en campos grandes con pocos tractores.
 
-<!-- PENDIENTE: Descomposición simulada del costo. Fuente: barrido.csv; columnas costo_propiedad, costo_R, costo_H, costo_diesel, costo_no_sembrada, cada una dividida entre ha_sembrables; barras apiladas por hectareas × n_tractores (un panel por mecanismo). Comentar si los porcentajes de R se parecen a la tabla de arriba. -->
+**Descomposición simulada** (`barrido.csv`, promedio de los tres mecanismos, $/ha y porcentaje del total):
+
+| Campo y flota | Propiedad | R (retraso) | H (reparación) | Diésel | Total |
+|---|---|---|---|---|---|
+| 10 ha, 1 tractor | $3,882 (90 %) | $142 (3 %) | $58 | $247 | $4,328 |
+| 20 ha, 1 tractor | $1,963 (77 %) | $287 (11 %) | $60 | $255 | $2,564 |
+| 40 ha, 1 tractor | $1,002 (51 %) | $596 (31 %) | $67 | $286 | $1,950 |
+| 80 ha, 1 tractor | $502 (25 %) | $1,179 (58 %) | $66 | $282 | $2,029 |
+| 80 ha, 2 tractores | $1,004 (53 %) | $536 (28 %) | $66 | $284 | $1,890 |
+| 160 ha, 1 tractor | $250 (7 %) | $2,795 (80 %) | $81 | $347 | $3,474 |
+| 160 ha, 4 tractores | $1,002 (45 %) | $780 (35 %) | $82 | $353 | $2,216 |
+
+La parte de R se parece a la de la tabla de arriba cuando la flota es chica: con 1 tractor, R simulado es $596/ha en 40 ha y $2,795 en 160 ha, contra $660 y $2,639 estimados. Con flotas grandes en campos grandes la simulación da bastante más R que la estimación (160 ha con 4 tractores: $780 contra $440), porque ahí se acumulan las pérdidas de coordinación y la baja eficiencia de la sección 1.1. H y diésel suman $305 a $435/ha y casi no cambian con N, como se esperaba; el diésel pesa 4 a 5 veces más que la reparación.
 
 ### 2.2 En qué se va el tiempo de la flota
 
@@ -80,9 +106,26 @@ Las horas-tractor por estado (`trabajo_h`, `traslado_h`, `W_espera_h`, `W_servic
 | Con 1 surcador, las sembradoras esperan surco sin importar el mecanismo | `normal_20ha_2t`, `normal_40ha_3t_obst` | `W_precedencia_h` |
 | La coordinación cuesta más de lo que aporta cuando sobra flota | `limite_4t_10ha` | `mensajes_total`, `tiempo_computo_s` contra la nula diferencia en `costo_ha` |
 
-<!-- PENDIENTE: Barras apiladas de horas por grupo de actividad (Trabajando, Traslado, Estación, Esperas, Ocio; colores del contrato) por mecanismo y escenario: viz.barras_actividad sobre escenarios.csv. Escribir aquí, escenario por escenario, cuál de los mecanismos de la tabla se observó y con qué magnitud (diferencia pareada en horas con metricas.prueba_pareada, IC y p). -->
+**Lo que se observó** (horas-tractor promedio del barrido por mecanismo y tamaño de flota; gráficas `indicadores_actividad_*.png`):
 
-<!-- PENDIENTE: Curvas de avance (sembrado_frac contra t_h) por mecanismo para normal_20ha_2t y falla_20ha_4t: viz.curvas_cobertura sobre resultados/curvas.csv. Comentar dónde se separan las curvas (al inicio por la negociación, a mitad por recargas, después del 50 % por la falla). -->
+| Horas-tractor | M0 (N = 2 / 3 / 4) | M1 (N = 2 / 3 / 4) | M2 (N = 2 / 3 / 4) |
+|---|---|---|---|
+| Espera de surco (`W_precedencia_h`) | 0.1 / 13.8 / 0.0 | 10.3 / 29.5 / 7.5 | 0.0 / 0.1 / 0.0 |
+| Espera por conflicto (`W_conflicto_h`) | 0.6 / 1.1 / 1.1 | 0.2 / 1.4 / 1.7 | 0.0 / 0.0 / 0.0 |
+| Ocio (`W_ocio_h`) | 0 / 0 / 0 | 0.7 / 2.4 / 1.1 | 0.7 / 2.8 / 1.1 |
+| Traslado (`traslado_h`) | 21.5 / 21.5 / 21.3 | 20.5 / 22.3 / 20.9 | 26.9 / 30.3 / 27.0 |
+| Visitas al depósito (`recargas`) | 34 / 34 / 33 | 34 / 34 / 34 | 46 / 45 / 45 |
+
+Contra la tabla de mecanismos esperados:
+
+- **Contract Net repartiendo mejor:** no se observó. Lo que domina en M1 es la espera de surco. La explicación más probable es que la utilidad solo mide distancia: la sembradora gana la hilera más cercana aunque su surco vaya muy atrás, mientras que en M0 sigue a su surcador en orden. En `normal_20ha_2t` M1 tarda 2.2 h más que M0 (15.1 contra 12.9 h), y 1.7 de esas horas son espera de surco.
+- **Oferta anticipada:** el ocio de M1 y M2 se queda en 0.7 a 2.8 h-tractor por corrida, poco frente a 20 o más horas de trabajo. Funciona, pero no elimina por completo el costo de negociar.
+- **Recarga anticipada y fila en blackboard:** M2 visita el depósito unas 12 veces más que M0 y M1 (recarga antes de empezar una hilera que no alcanzaría a terminar) y gasta 5 a 8 h-tractor más en traslados, pero a cambio elimina casi toda la espera de surco y de conflicto. El balance le favorece: en `normal_40ha_3t_obst` tarda 16.8 h contra 21.6 de M0 y 22.3 de M1.
+- **Cooperative A* en cabecera:** confirmado (pregunta 3b). M0 y M1 acumulan 1 a 2 h-tractor de espera por conflicto con 3 y 4 tractores; M2, prácticamente 0.
+- **Esperas de surco con un solo surcador:** confirmado para M0 y M1 con 3 tractores (13.8 y 29.5 h). M2 casi no las tiene. La diferencia más probable con M1 es que las sembradoras de M2 nunca sueltan una hilera a la mitad, porque recargan antes de empezarla: no quedan hileras de siembra reanunciadas a media tarea que obliguen a esperar surco. Las visitas extra al depósito también las retrasan respecto al surcador. Para confirmarlo hace falta la ablación de la mejora 10.
+- **Coordinación que no paga:** confirmado en `limite_4t_10ha`. Los tres mecanismos terminan en 3.1 a 3.2 h y cuestan lo mismo (±$8/ha), pero M1 y M2 mandan unos 465 mensajes para lograrlo.
+
+**Curvas de avance** (`experimental_cobertura.png`, de `curvas.csv`). En `falla_20ha_4t` la curva de M0 se aplana en 82.5 % en promedio después de la falla, mientras M1 y M2 llegan a 100 % (M2 en 7.0 h y M1 en 8.4 h). En `normal_20ha_2t` las tres llegan a 100 %, en el orden M2 (11.7 h), M0 (12.9 h) y M1 (15.1 h).
 
 ---
 
@@ -123,9 +166,23 @@ Todos los parámetros entran con exponente ½: un cambio de 4× en un parámetro
 | Rendimiento | 8.08 t/ha (riego nacional) | La mitad, por ejemplo temporal | ≈ 85 ha |
 | Ancho de la sembradora | 4 surcos (3.04 m) | 8 surcos (6.08 m) | ≈ 85 ha |
 
-<!-- PENDIENTE: Sensibilidad económica simulada: metricas.sensibilidad_economica(barrido, cfg) (columnas parametro, nivel bajo/base/alto, valor, mecanismo, hectareas, n_tractores, costo_ha_media, n_optimo, pct_en_ventana_media). Gráfica: viz.tornado del cambio en costo_ha por parámetro, una por tamaño de campo. Tabla: para cada parámetro y extremo, n_optimo por hectareas y mecanismo; marcar en negritas donde cambia respecto al nivel base. Confirmar o corregir el orden de la tabla analítica de arriba, y confirmar que ventana_dias solo mueve pct_en_ventana_media. -->
+**Sensibilidad económica simulada** (`metricas.sensibilidad_economica` sobre el barrido, sin volver a simular; gráficas `experimental_tornado_*.png`). Cambio del costo por hectárea en el N óptimo del caso base al mover cada parámetro a su extremo bajo / alto (M2):
 
-<!-- PENDIENTE: Sensibilidad a la capacidad de tolva (único parámetro de la lista que requiere volver a simular): tolva_mitad_20ha_4t contra la misma configuración con tolva completa (barrido 20 ha, 4 tractores, mismas semillas) en recargas, W_espera_h, T_h y costo_ha. -->
+| Parámetro | 20 ha (N = 1, $2,535) | 80 ha (N = 2, $1,787) | 160 ha (N = 3, $2,103) |
+|---|---|---|---|
+| Vida útil (15 a 25 temporadas) | +$654 / −$393 | +$335 / −$201 | +$250 / −$150 |
+| Días laborables (60 % a 100 %) | +$185 / $0 | +$305 / $0 | +$576 / $0 |
+| Pérdida por día (0.2 % a 0.6 %) | −$139 / +$139 | −$229 / +$229 | −$432 / +$432 |
+| Jornada (8 a 14 h) | +$69 / −$79 | +$114 / −$131 | +$216 / −$247 |
+| Precio del maíz ($5,200 a $7,200) | −$39 / +$53 | −$64 / +$87 | −$121 / +$164 |
+| Precio del tractor ($750k a $840k) | −$114 / +$114 | −$60 / +$60 | −$48 / +$48 |
+| Duración de la ventana (20 a 40 días) | $0 / $0 | $0 / $0 | $0 / $0 |
+
+El N óptimo solo cambia en 80 ha, que es el campo más cercano a un cruce: con pérdida de 0.2 %/día, vida útil de 15 temporadas o jornadas de 14 h conviene **1 tractor** en lugar de 2, con los tres mecanismos. En 160 ha, M0 bajaría a 2 tractores con pérdida de 0.2 %. En 10, 20 y 40 ha ningún extremo cambia la respuesta.
+
+Esto confirma la tabla analítica con un matiz: el parámetro que más pesa **depende del tamaño del campo**. En campos chicos manda la vida útil, porque la propiedad es casi todo el costo. En campos grandes mandan los días laborables y la pérdida por día, porque R es casi todo el costo. El precio del tractor es el menos sensible en campos grandes y la duración de la ventana no mueve el costo en ningún caso: solo cambia `pct_en_ventana` (99.4 % con 20 días, 100 % con 30 y 40), como se anticipó.
+
+**Capacidad de tolva** (`tolva_mitad_20ha_4t` contra 20 ha y 4 tractores del barrido, mismas semillas): con la mitad de tolva las visitas al depósito se duplican (9 → 19 en M0; 10 → 21.5 en M2), el tiempo total sube 31 a 36 % (M0 6.9 → 9.5 h; M2 6.0 → 7.9 h) y el costo apenas 0.4 a 0.8 %. La espera en la fila casi no crece (0.30 → 0.36 h en M0): con dos sembradoras la estación no llega a saturarse. M2 sigue siendo el más rápido.
 
 ### 3.2 Parámetros de la arquitectura
 
@@ -138,7 +195,14 @@ Lo que esperábamos ver (propuesta) y dónde se mide. Fuente: `resultados/sens_a
 | `ventana_reservas` (solo M2) | 5, 10, 20 pasos | Ventanas cortas reaccionan tarde en cabecera; largas cuestan cómputo | `W_conflicto_h`, `vetos`, `tiempo_computo_s` |
 | `margen_recarga_hileras` (solo M2) | 0, 1, 2 hileras | Más margen = más viajes al depósito pero menos huecos y menos fila | `recargas`, `W_espera_h`, `traslado_h`, `costo_ha` |
 
-<!-- PENDIENTE: Para cada parámetro, gráfica de la métrica principal contra valor, una línea por mecanismo, con IC (viz.sens_arquitectura). Escribir: (a) el nivel de pérdida de mensajes en el que la diferencia M1 − M0 en T_h deja de ser significativa; (b) el timeout con menor T_h; (c) si ventana_reservas = 20 mejora W_conflicto_h lo suficiente para justificar el tiempo_computo_s; (d) el margen de recarga con menor costo_ha. Comparar la magnitud de estos efectos con los de la sección 3.1. -->
+**Resultados** (base de 20 ha y 4 tractores, 10 semillas; gráfica `experimental_sens_arquitectura.png`):
+
+- **Pérdida de mensajes.** Sin pérdida, M2 es 0.9 h más rápido que M0 (IC −1.0 a −0.9 h) y M1 0.2 h más lento (IC +0.1 a +0.3 h). Con 10 % M2 ya pierde contra M0 (+0.9 h, IC +0.7 a +1.1) y la desventaja crece rápido: con 30 % M1 tarda +8.8 h y M2 +8.1 h; con 50 %, +38 h y +30 h, es decir 6.5 y 5.3 veces lo que tarda M0. Casi todo ese tiempo es ocio: tractores esperando subastas o adjudicaciones que se perdieron. M0 no cambia porque no usa mensajes. La diferencia M1 − M0 nunca deja de ser significativa: es positiva desde 0 % de pérdida.
+- **Tiempo límite de ofertas.** El mejor es 3 pasos (M2 5.99 h), seguido de cerca por 5 (6.04 h). Con 1 paso se pierden ofertas que sí iban a llegar (los mensajes tardan de 0 a 1 paso por tramo) y el tiempo sube 20 % (M2 7.18 h, con 4 h de ocio). Con 10 pasos las hileras esperan su adjudicación y sube 7 % (6.44 h).
+- **Ventana de reservas.** Con 5, 10 o 20 pasos el resultado es idéntico (5.99 h, espera por conflicto prácticamente 0), mientras el tiempo de cómputo sube de 0.26 a 0.43 s por corrida (+65 %). En esta configuración una ventana de 5 basta y 20 no se justifica. La razón es que el modelo replanea en cada paso con prioridad estricta: los conflictos se resuelven a corta distancia.
+- **Margen de recarga anticipada.** El mejor es 0 hileras: 5.99 h y $8,203/ha. Con 1 o 2 hileras de margen el tiempo sube 25 % (7.5 h) por los viajes extra, y con 2 la fila desaparece (`W_espera_h` = 0) sin compensar esos viajes.
+
+**Comparación de magnitudes.** Los parámetros de arquitectura mueven mucho el tiempo (hasta 6 veces con 50 % de pérdida) pero poco el costo por hectárea en esta base: como máximo +10 % ($9,033 contra $8,227/ha con 50 % de pérdida en M1), porque ahí R es cerca del 1 % del costo. Los económicos mueven el costo entre 10 y 30 % y, cerca de un cruce, cambian la respuesta. Para la pregunta central pesan más los económicos; para elegir mecanismo pesan más los de arquitectura, sobre todo la pérdida de mensajes.
 
 ---
 
@@ -194,18 +258,26 @@ En las corridas de prueba (una semilla, sin experimentos formales) aparecieron e
 
 **La eficiencia de campo simulada cae en el rango de ASABE.** Hay que leerlo con cuidado: puede deberse a que los errores de escala se compensan (sección 5.3).
 
-<!-- PENDIENTE: Confirmar o corregir cada explicación de 4.3 con los experimentos (escenarios.csv, barrido.csv, sens_arquitectura.csv) y poner las magnitudes con IC. En particular: % del campo que pierde M0 en falla_20ha_4t comparado con el cuarto esperado; nivel de pérdida de mensajes desde el que M0 supera a M1 y M2; en qué configuraciones M1 es más lento que M0 y cuál de las cuatro explicaciones domina. Revisar también la eficiencia en campos grandes: una corrida de prueba de 160 ha con 4 tractores en M2 quedó por debajo del 50 %. -->
+**Lo que confirmaron los experimentos:**
+
+- **Falla.** M0 pierde en promedio el 17.5 % del campo (entre 7.2 y 28.1 % según la semilla), menos que el cuarto esperado. La falla ocurre cuando ya está sembrada la mitad del campo, pero las franjas no avanzan parejo, y cuánto le falta a la franja afectada depende de qué tractor falla y de cuánto llevaba. En la mitad de las corridas de M0 (10 de 20) la sembradora de la franja afectada se queda esperando un surco que nunca llega y la corrida termina por estancamiento: es el comportamiento "sin reacción" que define a M0, no un error.
+- **Pérdida de mensajes.** M0 supera a M2 desde 10 % de pérdida y a M1 desde 0 % (sección 3.2). Los reanuncios pasan de 1 (M2) o 14 (M1) sin pérdida a 124 y 146 con 30 %; las ofertas tardías se quedan en 0, así que el costo viene de adjudicaciones e `inform` perdidos que hay que esperar a que venzan, no de ofertas que llegan tarde.
+- **M1 más lento que M0.** Pasa en 16 de las 20 combinaciones del barrido. M1 solo es más rápido con 3 tractores en 10 y 20 ha (−0.3 y −0.7 h) y con 1 tractor en 160 ha (−5.1 h). Domina la explicación (2): la espera de surco de M1 es de 10.3 h-tractor con 2 tractores y 29.5 h con 3, contra 0.1 y 13.8 en M0. La (1), negociar, pesa poco (0.5 a 2.4 h de ocio). La peor combinación es 160 ha con 2 tractores: M1 tarda 37 h más que M0.
+- **M2 el más rápido con 3 y 4 tractores.** Solo en parte. M2 es el más rápido en 14 de las 20 combinaciones del barrido y en 8 de los 9 escenarios. Con 3 tractores gana siempre (13 a 25 % menos tiempo que M0). Pero en 40 y 160 ha pierde contra M0 con 1, 2 y 4 tractores: +9 a +13 % de tiempo en 40 ha y +23 a +34 % en 160 ha. En 160 ha la recarga anticipada explica buena parte (ver 4.4). En 40 ha la causa no está identificada: ahí la tolva solo desperdicia el 5.5 % de su capacidad (3 hileras de 63 celdas en 200), así que hay que separar componentes con la ablación de la mejora 10 antes de atribuirlo.
+- **Con 1 tractor los mecanismos casi no difieren.** No del todo. Hasta 80 ha difieren entre 3 y 9 % en tiempo: M2 es más rápido en 10, 20 y 80 ha y más lento en 40 ha. Esto es más de lo esperado para una flota sin nada que coordinar, y viene de las reglas de recarga y del orden de las hileras, no de la coordinación. En 160 ha la diferencia es grande: M2 tarda 26 % más que M1 y cuesta 24 % más (ver 4.4).
+- **Eficiencia de campo.** El promedio del barrido es 0.61, dentro del rango de ASABE, pero 236 de 1,200 corridas quedan fuera: todas las de 160 ha (0.43 a 0.53, por los traslados largos al depósito), las de 3 tractores en 40 y 80 ha (0.51 a 0.54, por la espera de surco del reparto 1 + 2) y algunas de 10 y 20 ha que pasan apenas de 0.75 (máximo 0.77). La corrida de 160 ha con 4 tractores y M2 da 0.45 en promedio.
 
 ### 4.4 Observados en las corridas
 
-<!-- PENDIENTE: Revisar y reportar, con conteos por escenario y mecanismo:
-  - Corridas con estancado = True (barrido.csv, escenarios.csv, sens_arquitectura.csv): cuántas, en qué configuraciones y por qué (abrir resultados/corridas/<id>/pasos.csv de una de ellas y buscar tractores en esperando_celda durante muchos pasos seguidos).
-  - Corridas con cobertura < 1 o n_no_sembradas > 0 sin falla activa (no deberían existir).
-  - Corridas con eficiencia_campo fuera de 50 a 75 % (ASABE): en qué tamaños y flotas, y qué estado domina el tiempo perdido.
-  - Valores extremos de T_h (histograma entre semillas, panel experimental) y de vetos.
-  - Filas largas en la estación (máximo de fila_estacion en serie) aunque ningún mecanismo esté diseñado para formarlas (comportamiento emergente previsto en la propuesta).
-  - Cualquier caso en que M2 salga peor que M1 o M1 peor que M0, con su explicación.
-  - Comparar recargas (resumen) con lo esperado: área ÷ tolva_ha por sembradora. -->
+**Corridas estancadas o incompletas.** En el barrido, 0 de 1,200. En escenarios, 11 de 540: las 10 de M0 con falla (esperadas, ver arriba) y 1 de M1 con 30 % de pérdida. En la sensibilidad, 3 de 290, todas de M1 con 20, 30 y 50 % de pérdida. Esas 4 corridas de M1 son las únicas que, sin falla, dejan celdas sin sembrar: la última hilera queda atrapada en ciclos de adjudicación y reanuncio cuyos mensajes se pierden una y otra vez, hasta que se corta por 3,000 pasos sin avance. M2 no tuvo ninguna en estas corridas.
+
+**El comportamiento inesperado más importante: M2 con 1 tractor en 160 ha.** Tarda 254 h contra 202 de M1 y siembra solo el 60 % dentro de la ventana de 30 días (M0 y M1, 82 a 88 %). La causa es la recarga anticipada combinada con la geometría: la tolva rinde 200 celdas y cada hilera mide 126, así que después de cada hilera quedan 74 celdas de semilla, que no alcanzan para la siguiente, y M2 regresa al depósito. Hace 140 visitas contra 92 y pasa 102 h en traslado contra 63 a 69. Con 2 y 4 tractores en 160 ha la misma regla afecta a cada sembradora, y M2 tarda 34 y 32 % más que M0. Es un caso en que una regla diseñada para evitar filas en la estación empeora el resultado cuando no hay con quién hacer fila. La mejora es que la recarga anticipada se active solo si hay más de una sembradora, o que la sembradora pueda empezar una hilera y recargar a medio camino cuando el depósito queda cerca.
+
+**Filas en la estación.** Ningún escenario promedia más de 0.4 h de espera en la fila. La fila emergente que preveía la propuesta casi no aparece porque con 4 tractores solo 2 son sembradoras, y los surcadores solo van por diésel una vez cada 6 h aproximadamente.
+
+**Recargas.** En 20 ha con 4 tractores (2 sembradoras), el área entre la tolva da unas 10 recargas de semilla (20.25 ha ÷ 2 ha), y se observaron 9 en M0 y 10 en M2, más las de diésel. Con tolva a la mitad, 19 a 21.5. Coinciden con lo esperado.
+
+**Distancia entre corridas de un mismo caso.** Sin obstáculos ni pérdida de mensajes los intervalos de confianza son muy estrechos (en el barrido, el IC del costo óptimo es de ±$1 a ±$25/ha). Como se advirtió en 4.1, eso hace que casi cualquier diferencia salga significativa: varias diferencias de M0 contra M1 con p < 0.001 valen menos de $30/ha.
 
 ---
 
@@ -406,7 +478,7 @@ print("cruce 1->2:", math.sqrt(prop * r / w), "cruce 2->4:", math.sqrt(8 * prop 
 <!-- Nota interna: los números de las secciones 2.1, 3.1, 5.1, 5.2 y del anexo A salen de la fórmula de A.4 y no dependen de la simulación. Si cambian los parámetros base en config/parametros.json, hay que recalcularlos. -->
 
 
-## Resultados medidos (modo completo, 20 semillas)
+## Anexo B. Tablas completas de resultados (modo completo, 20 semillas)
 
 Corridas: barrido 1200, escenarios 540, sensibilidad de arquitectura 290. Colisiones: 0. Intercambios: 0. Corridas estancadas en el barrido: 0.
 
