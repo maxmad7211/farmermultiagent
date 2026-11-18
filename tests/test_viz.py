@@ -170,8 +170,9 @@ def test_mapas_de_calor(corridas):
 
 def test_animacion_jshtml_y_gif(corridas, tmp_path):
     anim = viz.animacion(corridas["enriquecida"], n_cuadros=5, dpi=40)
-    html = anim.to_jshtml()
-    assert "<img" in html or "data:image" in html
+    html = viz.animacion_html(anim, dpi=30)
+    assert "data:image" in html or "<img" in html
+    assert len(html) < len(viz.animacion_html(anim, dpi=60))  # el dpi sí controla el tamaño
     ruta = viz.guardar_gif(anim, tmp_path / "anim.gif", fps=5)
     plt.close(anim._fig)
     from PIL import Image

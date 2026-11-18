@@ -308,10 +308,10 @@ def celdas():
     """))
     c.append(_py("""
         if ID_BASE is not None:
-            # dpi bajo para que el notebook no pese demasiado; el GIF se guarda con más resolución
-            anim = viz.animacion(c_base, n_cuadros=80, dpi=60)
+            # dpi bajo en el notebook para que no pese demasiado; el GIF lleva más resolución
+            anim = viz.animacion(c_base, n_cuadros=80)
             viz.guardar_gif(anim, FIGURAS / "animacion_campo.gif", fps=10, dpi=80)
-            display(HTML(anim.to_jshtml(default_mode="once")))
+            display(HTML(viz.animacion_html(anim, dpi=60)))
             plt.close(anim._fig)
     """))
     c.append(_md("""

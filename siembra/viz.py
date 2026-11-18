@@ -387,12 +387,21 @@ def _texto_corrida(corrida):
 
 
 def _titulo_ax(ax, titulo, sub=None, tam=11, extra=0):
-    """Título y subtítulo a la izquierda; ``extra`` (puntos) deja lugar para una leyenda arriba."""
-    ax.set_title(titulo, loc="left", pad=(20 if sub else 8) + extra, fontsize=tam,
+    """Título y subtítulo a la izquierda; ``extra`` (puntos) deja lugar para una leyenda arriba.
+
+    El subtítulo se parte en líneas del ancho del eje: un texto más ancho que la figura hace
+    que constrained_layout colapse los ejes."""
+    lineas = 0
+    if sub:
+        ancho_pt = ax.figure.get_figwidth() * max(ax.get_position().width, 0.3) * 72 + 60
+        sub = "\n".join(textwrap.wrap(sub, max(40, int(ancho_pt / (8 * 0.5)))))
+        lineas = sub.count("\n")
+    ax.set_title(titulo, loc="left", pad=(20 + 11 * lineas if sub else 8) + extra, fontsize=tam,
                  fontweight="semibold", color=TINTA)
     if sub:
         ax.annotate(sub, xy=(0, 1), xycoords="axes fraction", xytext=(0, 6 + extra),
-                    textcoords="offset points", ha="left", va="bottom", fontsize=8, color=TINTA_2)
+                    textcoords="offset points", ha="left", va="bottom", fontsize=8, color=TINTA_2,
+                    linespacing=1.25)
 
 
 def _titulo_fig(fig, titulo, sub=None):
@@ -724,6 +733,16 @@ def animacion(corrida, n_cuadros=80, dpi=80, intervalo_ms=120, estela=None):
     return anim
 
 
+def animacion_html(anim, dpi=60, default_mode="once"):
+    """HTML con controles (``to_jshtml``) a resolución baja para no inflar el notebook.
+
+    ``to_jshtml`` usa ``savefig.dpi`` y no el dpi de la figura, así que se fija aquí. Además
+    guarda en caché el HTML de la primera llamada; se descarta para que ``dpi`` siempre aplique."""
+    anim.__dict__.pop("_html_representation", None)
+    with mpl.rc_context({"savefig.dpi": dpi}):
+        return anim.to_jshtml(default_mode=default_mode)
+
+
 def guardar_gif(anim, ruta, fps=10, dpi=None):
     """Guarda la animación como GIF con PillowWriter y devuelve la ruta (``dpi`` por defecto el
     de la figura de la animación)."""
@@ -921,10 +940,7 @@ def mapa_pasadas(ax, corrida, titulo=True):
         sub = _texto_corrida(corrida)
         _titulo_ax(ax, f"Compactación: pasadas por celda (media en el área de trabajo {media:.1f})",
                    sub, tam=10.5)
-    hay_obst = (base == TIPO_OBSTACULO).any()
-    if hay_obst:
-        ax.legend(handles=_handles_celdas(["obstaculo"]), loc="upper left",
-                  bbox_to_anchor=(0, -0.09), ncols=1)
+    _leyenda_sin_valor(ax, False, (base == TIPO_OBSTACULO).any())
     return fig
 
 
@@ -947,13 +963,21 @@ def mapa_edad(ax, corrida, titulo=True):
 
 
 def _leyenda_sin_valor(ax, no_sembrada, obstaculo):
+    """Leyenda de las celdas sin valor en un mapa de calor. Va como leyenda de la figura cuando
+    el mapa es el único panel (una leyenda debajo de un eje con aspecto fijo puede hacer que
+    constrained_layout colapse) y debajo del eje si el mapa está dentro de otra figura."""
     handles = []
     if no_sembrada:
         handles.append(Patch(facecolor=COLOR_CELDA["libre"], label="No sembrada"))
     if obstaculo:
         handles += _handles_celdas(["obstaculo"])
-    if handles:
-        ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(0, -0.1), ncols=2)
+    if not handles:
+        return
+    fig = ax.figure
+    if len([a for a in fig.axes if a.get_label() != "<colorbar>"]) == 1:
+        fig.legend(handles=handles, loc="outside lower left", ncols=2)
+    else:
+        ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(0, -0.12), ncols=2)
 
 
 def mapas_comparados(corridas, tipo="pasadas", fig=None):
