@@ -39,7 +39,24 @@ Todas las diferencias contra el segundo mejor N tienen p < 10⁻¹². Son muy gr
 
 **Dónde quedan los cruces.** El cruce de 1 a 2 tractores cae entre 40 y 80 ha con los tres mecanismos, compatible con las ~60 ha de la estimación previa (el barrido no tiene puntos intermedios para ubicarlo mejor). El cruce de 2 a 4 sí se movió: la estimación lo ponía en 170 ha, así que en 160 ha esperaba 2 tractores, y la simulación da 3 o 4. La razón está en la eficiencia de campo simulada (`eficiencia_campo`): entre 10 y 80 ha queda en 0.63 a 0.73 con 1, 2 o 4 tractores, cerca del 65 % que supone la estimación, y por eso el primer cruce no se mueve; en 160 ha baja a 0.49 a 0.53, porque cada viaje al depósito cruza hasta 126 celdas (casi media hora a 13 s por celda). Con menos eficiencia la siembra tarda más, R pesa más y conviene agregar tractores antes: el cruce se mueve a campos más chicos, como predice el anexo A.3. Ojo: parte de esa baja eficiencia es un artefacto de escala (los traslados están sobreestimados unas 3 veces, sección 5.3), así que el corrimiento del segundo cruce es la conclusión menos firme.
 
-**¿Depende del mecanismo?** No entre 10 y 80 ha: los tres mecanismos eligen el mismo N. Solo en 160 ha difieren (M2 elige 3; M0 y M1, 4), y en esa misma configuración el ranking de mecanismos cambia con N (la gráfica de 160 ha cruza líneas). El mecanismo sí cambia el nivel del costo: en 80 ha con 2 tractores M2 cuesta $1,787/ha contra $1,952 de M0 (−8.5 %), su mayor ventaja en el barrido. En 160 ha con 2 tractores pasa lo contrario: M2 cuesta 21 % más que M0 (sección 4.4).
+**Actualización con el modelo sustituto** ([`sustituto.md`](sustituto.md)). El modelo sustituto es un Random Forest. Se entrenó con el barrido (60 puntos) más 75 puntos elegidos por aprendizaje activo. Para las respuestas se reentrena con esos puntos y los del conjunto de prueba (314 en total). Ese modelo final ubica los cruces con intervalo (`resultados/sustituto/cruces.csv`):
+
+- **De 1 a 2 tractores:** 68.3 ha con M0 (IC 68.0 a 69.5), 69.0 ha con M2 (68.3 a 69.6) y 76.0 ha con M1 (71.9 a 77.3).
+- **De 2 a 4 tractores:** 138.3 ha con M0 (135.9 a 140.0) y 118.7 ha con M1 (115.7 a 123.0).
+- **M1 entre 76 y 99 ha:** el óptimo regresa a 1 tractor en 85.5 ha y vuelve a 2 en 99.3 ha, con intervalos anchos (76.2 a 99.0 y 86.0 a 106.1). Ese regreso solo aparece al agregar el conjunto de prueba al modelo final, y sale de un solo tamaño medido: en 91 ha, 2 tractores costaron $2,346/ha contra $2,120 con 1. Entre 81 y 118 ha no hay otras corridas de M1, y entre 86 y 99 ha el modelo le da a 1 tractor solo 0.60 a 0.69 de probabilidad de ser el óptimo.
+- **M2 pasa de 2 a 3 tractores en 101.3 ha** (100.1 a 101.8), justo donde la tolva deja de alcanzar para 2 hileras completas.
+
+Los intervalos de Random Forest son estrechos: en la prueba, el costo simulado cayó dentro de su IC 95 % en 75 % de los casos (proceso gaussiano con los mismos datos: 90 %, `comparacion_modelos.csv`). Así que los intervalos de los cruces probablemente se quedan cortos.
+
+En 160 ha el modelo da 4 tractores con M0, 3 con M2 y 4 con M1, este último con probabilidad 0.72 (0.28 para 5 tractores). El aprendizaje activo solo simuló flotas de 1 a 4 tractores, en ningún tamaño 5 o 6, así que el borde del barrido no quedó confirmado con corridas en 160 ha. Sí hay corridas cerca: en el conjunto de prueba, en 136 y 139 ha, 5 y 6 tractores siempre cuestan más que el mejor N (M0 en 139 ha: $2,094/ha con 4 tractores, $2,350 con 5 y $2,518 con 6).
+
+El conjunto de prueba (10 tamaños al azar, 540 corridas) mide el modelo entrenado sin esas corridas (barrido + aprendizaje activo). Predice el costo con 0.68 a 1.76 % de error absoluto medio según el mecanismo (1.06 % en promedio) y acierta el N óptimo en 29 de 30 casos. El único fallo es M1 en 91 ha: elige 2 tractores, que cuestan $2,346/ha, contra $2,120 con 1. Ahí el modelo predijo $1,941 para 2 tractores, un error de 17.3 %, el mayor de la prueba.
+
+El aprendizaje activo ayudó poco. Con solo el barrido el error promedio era 1.26 %. Bajó en M1 (2.17 a 1.76 %) y en M2 (0.90 a 0.68 %), pero subió un poco en M0 (0.70 a 0.74 %). La cobertura del IC 95 % bajó en M0 (76 a 64 %) y en M1 (78 a 75 %), y subió en M2 (83 a 87 %).
+
+Con los mismos datos, el árbol de decisión y Gradient Boosting predicen un poco mejor (0.84 y 0.89 % de error, contra 1.05 % de Random Forest en esa comparación), pero no dan incertidumbre, que necesita el aprendizaje activo. Los 8 modelos comparados aciertan 29 de 30 (`resultados/sustituto/comparacion_modelos.csv`).
+
+**¿Depende del mecanismo?** En el barrido, no entre 10 y 80 ha: los tres mecanismos eligen el mismo N. Solo en 160 ha difieren (M2 elige 3; M0 y M1, 4), y en esa misma configuración el ranking de mecanismos cambia con N (la gráfica de 160 ha cruza líneas). Entre los tamaños del barrido, el modelo sustituto sí encuentra diferencias: en 125 ha M0 elige 2 tractores, M1 4 (probabilidad 0.96) y M2 3. El mecanismo sí cambia el nivel del costo: en 80 ha con 2 tractores M2 cuesta $1,787/ha contra $1,952 de M0 (−8.5 %), su mayor ventaja en el barrido. En 160 ha con 2 tractores pasa lo contrario: M2 cuesta 21 % más que M0 (sección 4.4).
 
 Alcance de la conclusión: la proporción óptima que salga es válida para una flota **dedicada** a esta siembra (sección 5.1) y con el surcado dentro de la ventana (sección 5.2). Si alguno de esos dos supuestos no se cumple, la respuesta cambia más que con cualquier parámetro económico (sección 3.1).
 
@@ -270,6 +287,23 @@ En las corridas de prueba (una semilla, sin experimentos formales) aparecieron e
 ### 4.4 Observados en las corridas
 
 **Corridas estancadas o incompletas.** En el barrido, 0 de 1,200. En escenarios, 11 de 540: las 10 de M0 con falla (esperadas, ver arriba) y 1 de M1 con 30 % de pérdida. En la sensibilidad, 3 de 290, todas de M1 con 20, 30 y 50 % de pérdida. Esas 4 corridas de M1 son las únicas que, sin falla, dejan celdas sin sembrar: la última hilera queda atrapada en ciclos de adjudicación y reanuncio cuyos mensajes se pierden una y otra vez, hasta que se corta por 3,000 pasos sin avance. M2 no tuvo ninguna en estas corridas.
+
+**Estancamientos fuera del barrido.** Al explorar con el modelo sustituto tamaños de campo y flotas que el barrido no probó, 13 configuraciones tuvieron al menos una corrida estancada, sin falla y sin pérdida de mensajes (`resultados/sustituto/atorados.csv`). Son 18 corridas atoradas de 915 nuevas (540 del conjunto de prueba y 375 del aprendizaje activo). Por ejemplo:
+
+- M0 con 136 ha y 3 tractores se atora en las 3 semillas, en 78 % de cobertura.
+- M1 con 136 ha y 5 tractores se atora en una semilla, en 18 %.
+- M2 con 136 ha y 6 tractores se atora en 2 de 3 semillas, en 22 %.
+
+El 0 de 1,200 del barrido no garantiza que la simulación nunca se bloquee: solo probó 5 tamaños con 1 a 4 tractores. Las corridas atoradas no se usan para entrenar ni para evaluar el modelo sustituto. Una revisión del código de la simulación encontró 6 causas, cada una verificada de forma independiente:
+
+1. La regla de ocupación de la estación en `_paso_deposito`.
+2. `_ceder` empuja en línea hasta una esquina.
+3. En M1, una sembradora se puede reasignar su propia hilera.
+4. En M2, la fila del blackboard puede quedar imposible de cumplir.
+5. WHCA* no deja libre la celda que otro tractor ocupa en t + 1.
+6. En M1 quedan tareas fantasma cuando la tolva se vacía en la última celda de una hilera.
+
+Las correcciones todavía no se aplican al código: todos los resultados de este documento salen del código con esos defectos. Cada caso se reproduce con su configuración (`atorados.csv`) y la semilla de la corrida estancada (columnas `semilla` y `estancado` de `prueba.csv` o `activo.csv`).
 
 **El comportamiento inesperado más importante: M2 con 1 tractor en 160 ha.** Tarda 254 h contra 202 de M1 y siembra solo el 60 % dentro de la ventana de 30 días (M0 y M1, 82 a 88 %). La causa es la recarga anticipada combinada con la geometría: la tolva rinde 200 celdas y cada hilera mide 126, así que después de cada hilera quedan 74 celdas de semilla, que no alcanzan para la siguiente, y M2 regresa al depósito. Hace 140 visitas contra 92 y pasa 102 h en traslado contra 63 a 69. Con 2 y 4 tractores en 160 ha la misma regla afecta a cada sembradora, y M2 tarda 34 y 32 % más que M0. Es un caso en que una regla diseñada para evitar filas en la estación empeora el resultado cuando no hay con quién hacer fila. La mejora es que la recarga anticipada se active solo si hay más de una sembradora, o que la sembradora pueda empezar una hilera y recargar a medio camino cuando el depósito queda cerca.
 

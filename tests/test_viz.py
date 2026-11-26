@@ -44,8 +44,17 @@ def generar_resultados(carpeta, semillas=2):
     """Escribe en `carpeta` los CSV y las corridas detalladas con el formato del contrato."""
     from siembra import experimentos
 
+    from siembra import sustituto
+
     experimentos.correr(modo="rapido", semillas=semillas, nucleos=1, salida=carpeta,
                         simulador=SIMULADOR_SINTETICO, verbose=False)
+    # Modelo sustituto con el mismo simulador falso y lo mínimo para llenar la sección 5
+    sustituto.correr(carpeta, modo="rapido", iteraciones=1, ha_por_iteracion=1, semillas=2, prueba_ha=2,
+                     prueba_semillas=1, nucleos=1, simulador=SIMULADOR_SINTETICO, verbose=False)
+    spec = importlib.util.spec_from_file_location("comparar_modelos", RAIZ / "herramientas" / "comparar_modelos.py")
+    comparar_modelos = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(comparar_modelos)
+    comparar_modelos.comparar(carpeta)
     return Path(carpeta)
 
 
@@ -407,7 +416,8 @@ def test_notebook_completo_y_html(tmp_path, resultados, monkeypatch):
     figuras = resultados / "figuras"
     for nombre in ("entorno_mapa_campo.png", "animacion_campo.gif", "indicadores_tarjetas.png",
                    "comunicacion_subasta.png", "experimental_curvas_costo.png",
-                   "experimental_sens_arquitectura.png", "experimental_tornado_M1_20ha.png"):
+                   "experimental_sens_arquitectura.png", "experimental_tornado_M1_20ha.png",
+                   "ml_n_optimo.png", "ml_costos.png", "ml_evaluacion.png", "ml_mapa_perdida_dia.png"):
         assert (figuras / nombre).exists(), nombre
     html = mod.exportar_html(nb, resultados / "dashboard.html")
     assert html.stat().st_size > 100_000

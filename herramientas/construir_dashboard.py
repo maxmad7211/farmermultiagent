@@ -56,6 +56,7 @@ def celdas():
 
         ```
         python -m siembra.experimentos --modo rapido
+        python -m siembra.sustituto --modo rapido
         python herramientas/construir_dashboard.py --ejecutar --html
         ```
 
@@ -67,7 +68,8 @@ def celdas():
         `resultados/figuras/` para el reporte y la presentación.
 
         **Secciones.** 0 · Datos y condiciones de cada experimento · 1 · Panel del entorno ·
-        2 · Panel de indicadores · 3 · Panel de comunicación · 4 · Panel experimental.
+        2 · Panel de indicadores · 3 · Panel de comunicación · 4 · Panel experimental ·
+        5 · Modelo sustituto (machine learning).
 
         Colores fijos en todo el tablero: M0 azul, M1 naranja, M2 aqua; actividades y estados de
         celda según `docs/contrato_datos.md`.
@@ -627,6 +629,185 @@ def celdas():
         else:
             aviso("no existe sens_arquitectura.csv.")
     """))
+    # ------------------------------------------------------------------ 5. modelo sustituto
+    c.append(_md("""
+        ## 5. Modelo sustituto (machine learning)
+
+        El barrido responde la pregunta central solo en 5 tamaños de campo y con 1 a 4 tractores.
+        Un **Random Forest** por mecanismo (`siembra/sustituto.py`; uno de los métodos del documento
+        del curso) aprende de las corridas dos salidas físicas de la simulación (el retraso medio de
+        siembra y las horas de motor por hectárea) y el costo se calcula con la misma función de
+        costo del proyecto. Con eso se obtiene el N óptimo en cualquier tamaño de 10 a 160 ha, con
+        su incertidumbre, que sale de la dispersión entre los árboles. `--modelo gp` usa un proceso
+        gaussiano en su lugar.
+
+        - **Aprendizaje activo:** en cada ronda el modelo elige los tamaños donde más duda cuál N
+          gana, se simulan ahí los N que compiten y se reentrena.
+        - **Evaluación honesta:** un conjunto de prueba de tamaños al azar que el modelo nunca usa
+          para entrenar, más la verificación prospectiva de cada ronda (predicción hecha antes de
+          simular).
+
+        Los datos salen de `resultados/sustituto/` (`python -m siembra.sustituto`). El método está
+        en `docs/sustituto.md`.
+    """))
+    c.append(_py("""
+        from siembra import sustituto
+
+        CARPETA_ML = RESULTADOS / sustituto.CARPETA
+
+
+        def leer_ml(nombre):
+            ruta = CARPETA_ML / sustituto.ARCHIVOS[nombre]
+            return pd.read_csv(ruta) if ruta.exists() else None
+
+
+        ml = {k: leer_ml(k) for k, archivo in sustituto.ARCHIVOS.items() if archivo.endswith(".csv")}
+        ruta_meta = CARPETA_ML / sustituto.ARCHIVOS["meta"]
+        meta_ml = json.loads(ruta_meta.read_text(encoding="utf-8")) if ruta_meta.exists() else None
+        HAY_ML = ml["optimo"] is not None and len(ml["optimo"]) > 0
+        if not HAY_ML:
+            aviso("no hay resultados del modelo sustituto. Genéralos desde la raíz del proyecto con "
+                  "`python -m siembra.sustituto` y vuelve a construir el dashboard.")
+        else:
+            filas = {"Modelo": meta_ml.get("modelo_nombre", "Proceso gaussiano"), "Generado": meta_ml.get("fecha"),
+                     "Modo": meta_ml.get("modo"),
+                     "Rondas de aprendizaje activo": meta_ml.get("iteraciones"),
+                     "Tamaños de campo por ronda y mecanismo": meta_ml.get("ha_por_iteracion"),
+                     "Semillas por punto (activo / prueba)": f"{meta_ml.get('semillas_activo')} / {meta_ml.get('semillas_prueba')}",
+                     "Tamaños del conjunto de prueba (ha)": ", ".join(f"{h:g}" for h in meta_ml.get("tamanos_prueba", [])),
+                     "Puntos (mecanismo, ha, N): barrido / + activo / modelo final":
+                         f"{meta_ml.get('puntos_barrido')} / {meta_ml.get('puntos_barrido_activo')} / {meta_ml.get('puntos_modelo_final')}",
+                     "Rango del modelo": f"{meta_ml['rango_hectareas'][0]:g} a {meta_ml['rango_hectareas'][1]:g} ha, N = 1 a {meta_ml['n_max']}",
+                     "scikit-learn": meta_ml.get("scikit_learn")} if meta_ml else {}
+            display(pd.DataFrame({"valor": filas}))
+    """))
+    c.append(_md("""
+        ### ¿Cuántos tractores por hectárea, en cualquier tamaño de campo?
+
+        Cada franja es la probabilidad de que ese N tenga el menor costo por hectárea. Las líneas
+        punteadas marcan dónde cambia el N óptimo y la banda gris su intervalo del 95 %; los
+        triángulos de arriba son el óptimo observado en el barrido. Qué mirar: dónde caen los
+        cambios de N (el barrido solo decía "entre 40 y 80 ha") y qué tan ancha es la banda.
+    """))
+    c.append(_py("""
+        if HAY_ML:
+            obs_opt = metricas.optimo_por_campo(barrido) if barrido is not None else None
+            mostrar(viz.sustituto_optimo(ml["optimo"], ml["cruces"], obs_opt), "ml_n_optimo")
+            display(ml["cruces"][["mecanismo", "n_de", "n_a", "hectareas", "ic_bajo", "ic_alto"]]
+                    .rename(columns={"n_de": "de N", "n_a": "a N", "hectareas": "tamaño del cambio (ha)",
+                                     "ic_bajo": "IC 95 % bajo", "ic_alto": "IC 95 % alto"})
+                    .round(1).set_index("mecanismo"))
+            o = ml["optimo"]
+            tam = sorted(set(barrido["hectareas"]) if barrido is not None else [])
+            if tam:
+                display(Markdown("**N óptimo del modelo en los tamaños del barrido** (P = probabilidad de que sea el óptimo)"))
+                t = o[o["hectareas"].isin(tam)]
+                display(t.assign(texto=[f"{n} (P = {p:.0%})" for n, p in zip(t["n_optimo"], t["p_optimo"])])
+                        .pivot(index="mecanismo", columns="hectareas", values="texto"))
+    """))
+    c.append(_md("""
+        ### Costo por hectárea predicho
+
+        Costo esperado de cada N según el tamaño de campo, con su banda del 95 %, y los puntos
+        realmente simulados (barrido, aprendizaje activo y prueba). Qué mirar: si los puntos caen
+        sobre las líneas, dónde se cruzan las líneas (ahí cambia el N óptimo) y los saltos, que
+        vienen de cuántas hileras caben en una tolva (M2 recarga antes de empezar una hilera que
+        no puede terminar).
+    """))
+    c.append(_py("""
+        if HAY_ML:
+            simuladas = [d for d in (barrido, ml["activo"], ml["prueba"]) if d is not None and len(d)]
+            obs_ml = sustituto.preparar(pd.concat(simuladas, ignore_index=True))
+            mostrar(viz.sustituto_costos(ml["curva"], obs_ml), "ml_costos")
+    """))
+    c.append(_md("""
+        ### ¿Qué tan bien predice el modelo?
+
+        Costo predicho contra simulado en corridas que el modelo no usó para entrenar. Los dos
+        primeros paneles son el conjunto de prueba (con el modelo que solo conoce el barrido y con
+        el que además tiene las corridas del aprendizaje activo); el tercero, la verificación
+        prospectiva: lo que el modelo predijo para cada punto antes de que se simulara. En la
+        tabla, `acierto_n_optimo` es la fracción de tamaños de prueba donde el modelo recomienda el
+        mismo N que la simulación, y `sobrecosto_medio_ha` lo que costaría de más seguir su
+        recomendación.
+    """))
+    c.append(_py("""
+        if HAY_ML and ml["evaluacion_detalle"] is not None and len(ml["evaluacion_detalle"]):
+            mostrar(viz.sustituto_evaluacion(ml["evaluacion_detalle"], ml["verificacion"]), "ml_evaluacion")
+            display(ml["evaluacion"].set_index(["modelo", "mecanismo"]).round(3))
+        elif HAY_ML:
+            aviso("no hay conjunto de prueba (se corrió con `--prueba-ha 0`).")
+    """))
+    c.append(_md("""
+        ### Aprendizaje activo, ronda por ronda
+
+        Puntos que eligió el modelo en cada ronda, con la predicción que hizo antes de simularlos.
+        Qué mirar: si el error y la cobertura del intervalo mejoran de una ronda a la siguiente.
+    """))
+    c.append(_py("""
+        if HAY_ML and ml["verificacion"] is not None and len(ml["verificacion"]):
+            v = ml["verificacion"]
+            display(v.groupby("iteracion").agg(puntos=("costo_pred", "size"),
+                                               error_abs_medio_pct=("error_pct", lambda x: x.abs().mean()),
+                                               dentro_ic95=("dentro_ic", "mean")).round(3))
+            display(v[["iteracion", "mecanismo", "hectareas", "n_tractores", "p_optimo_previa", "costo_pred",
+                       "ic_bajo", "ic_alto", "costo_obs", "error_pct"]].round(2).set_index(["iteracion", "mecanismo"]))
+        elif HAY_ML:
+            aviso("no hubo rondas de aprendizaje activo.")
+    """))
+    c.append(_md("""
+        ### N óptimo según los parámetros económicos
+
+        Como el costo se calcula después del modelo, cambiar un precio o la pérdida por día no
+        requiere simular ni reentrenar. Cada mapa muestra el N óptimo por tamaño de campo y valor
+        del parámetro, dentro de los rangos de la sensibilidad de la propuesta; la línea punteada es
+        el caso base.
+    """))
+    c.append(_py("""
+        if HAY_ML and ml["mapa"] is not None:
+            for ruta in ("agronomia.perdida_dia", "escala_tiempo.dias_laborables", "economia.temporadas_vida"):
+                if (ml["mapa"]["parametro"] == ruta).any():
+                    seccion, clave = ruta.split(".")
+                    mostrar(viz.sustituto_mapa(ml["mapa"], ruta, base=cfg_base[seccion][clave]),
+                            f"ml_mapa_{clave}")
+    """))
+    c.append(_md("""
+        ### ¿Por qué este modelo? Comparación con los métodos del curso
+
+        Los modelos de regresión del documento del curso, entrenados con los mismos datos (barrido +
+        aprendizaje activo), las mismas entradas y salidas y evaluados en el mismo conjunto de prueba
+        (`herramientas/comparar_modelos.py`). Qué mirar: las diferencias de error entre los mejores son
+        chicas y todos eligen igual el número de tractores; lo que separa a Random Forest es que, de la
+        lista, es el único que da incertidumbre, y sin ella no hay aprendizaje activo.
+    """))
+    c.append(_py("""
+        ruta_cmp = CARPETA_ML / "comparacion_modelos.csv"
+        if HAY_ML and ruta_cmp.exists():
+            cmp = pd.read_csv(ruta_cmp)
+            display(cmp.rename(columns={"numero_curso": "núm. en el curso", "error_medio_pct": "error medio (%)",
+                                        "error_max_pct": "error máximo (%)", "sobrecosto_medio_ha": "sobrecosto ($/ha)",
+                                        "cobertura_ic95": "dentro del IC 95 %", "semiancho_pct": "semiancho del IC (%)"})
+                    .round(3).set_index("modelo"))
+        elif HAY_ML:
+            aviso("no existe comparacion_modelos.csv; genéralo con `python herramientas/comparar_modelos.py`.")
+    """))
+    c.append(_md("""
+        ### Configuraciones donde la simulación se atoró
+
+        Al explorar tamaños de campo y flotas que el barrido no probó aparecen corridas que se
+        estancan (dejan de avanzar sin terminar de sembrar). No se usan para entrenar porque no
+        miden el desempeño de la flota sino un bloqueo de la simulación; se listan aquí para
+        revisarlas.
+    """))
+    c.append(_py("""
+        if HAY_ML:
+            at = ml["atorados"]
+            if at is None or len(at) == 0:
+                display(Markdown("Ninguna corrida del modelo sustituto se atoró."))
+            else:
+                display(at.round(3).set_index(["grupo", "mecanismo"]))
+    """))
+
     c.append(_md("""
         ---
         Figuras guardadas para el reporte y la presentación:

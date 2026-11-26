@@ -1,0 +1,43 @@
+{
+  "fecha": "2026-11-23 18:08:31",
+  "modelo": "rf",
+  "modelo_nombre": "Random Forest",
+  "modo": "completo",
+  "iteraciones": 4,
+  "ha_por_iteracion": 3,
+  "semillas_activo": 5,
+  "tamanos_prueba": [
+    17.0,
+    19.0,
+    24.0,
+    25.0,
+    30.0,
+    53.0,
+    65.0,
+    91.0,
+    136.0,
+    139.0
+  ],
+  "semillas_prueba": 3,
+  "rango_hectareas": [
+    10.0,
+    160.0
+  ],
+  "n_max": 6,
+  "puntos_barrido": 60,
+  "puntos_barrido_activo": 135,
+  "puntos_modelo_final": 314,
+  "muestras": 300,
+  "diesel_por_H": 10.5,
+  "hiperparametros": {
+    "M0/y_retraso": "RandomForestRegressor(n_estimators=300, random_state=0)",
+    "M0/H_ha": "RandomForestRegressor(n_estimators=300, random_state=0)",
+    "M1/y_retraso": "RandomForestRegressor(n_estimators=300, random_state=0)",
+    "M1/H_ha": "RandomForestRegressor(n_estimators=300, random_state=0)",
+    "M2/y_retraso": "RandomForestRegressor(n_estimators=300, random_state=0)",
+    "M2/H_ha": "RandomForestRegressor(n_estimators=300, random_state=0)"
+  },
+  "version_parametros": "0.1.0",
+  "scikit_learn": "1.9.1",
+  "segundos": 130.4
+}

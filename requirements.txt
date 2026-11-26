@@ -7,6 +7,9 @@ numpy==2.5.5
 pandas==3.1.1
 scipy==1.18.1
 
+# Modelo sustituto (proceso gaussiano, siembra/sustituto.py)
+scikit-learn==1.9.1
+
 # Gráficas
 matplotlib==3.11.2
 seaborn==0.13.2

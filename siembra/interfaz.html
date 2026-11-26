@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probar el modelo sustituto</title>
+<style>
+:root {
+  --fondo: #F5F3EC; --panel: #FBFAF6; --tinta: #14271C; --suave: #4A5246; --linea: #D3CEBF;
+  --verde: #3F7A34; --verde-claro: #DCE8D3; --aviso: #F9EEDA; --aviso-borde: #E2B13C; --error: #B3261E;
+  --n1: #DCE8D3; --n2: #A9C99A; --n3: #6FA35E; --n4: #3F7A34; --n5: #2B5A24; --n6: #173816;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #101A14; --panel: #17241C; --tinta: #EEF2EA; --suave: #B8C2B3; --linea: #2E4034;
+    --verde: #8BC17A; --verde-claro: #23392B; --aviso: #3A3020; --aviso-borde: #C99A2E; --error: #F2867E;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fondo); color: var(--tinta);
+  font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+.sub { color: var(--suave); margin: 0 0 24px; }
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.grid > * { min-width: 0; }
+.tabla { overflow-x: auto; }
+.panel { background: var(--panel); border: 1px solid var(--linea); border-radius: 14px; padding: 20px; }
+label, .etiqueta { display: block; font-weight: 600; margin-bottom: 6px; }
+.fila { margin-bottom: 20px; }
+.ha { display: flex; gap: 10px; align-items: center; }
+.ha input[type=number] { width: 110px; }
+input[type=number] { font: inherit; padding: 8px 10px; border: 1px solid var(--linea); border-radius: 8px;
+  background: var(--fondo); color: var(--tinta); width: 100%; }
+input[type=range] { width: 100%; accent-color: var(--verde); }
+.mecs { display: grid; gap: 8px; }
+.mec { text-align: left; font: inherit; padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--linea); background: var(--fondo); color: var(--tinta); }
+.mec b { margin-right: 6px; }
+.mec[aria-pressed=true] { border: 2px solid var(--verde); padding: 9px 11px; background: var(--verde-claro); }
+details summary { cursor: pointer; font-weight: 600; margin-bottom: 12px; }
+.param { margin-bottom: 12px; }
+.param label { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+.param .base { color: var(--suave); font-size: 12px; margin-top: 2px; }
+button.link { background: none; border: 0; color: var(--verde); font: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
+.resp-n { font-size: 44px; font-weight: 700; line-height: 1.1; margin: 4px 0; }
+.resp-costo { font-size: 18px; }
+.suave { color: var(--suave); }
+.aviso { background: var(--aviso); border: 1px solid var(--aviso-borde); border-radius: 10px; padding: 12px 14px; margin-top: 16px; }
+.error { color: var(--error); font-weight: 600; margin-top: 12px; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--linea); }
+th { font-size: 13px; color: var(--suave); font-weight: 600; }
+td.num, th.num { text-align: right; }
+tr.mejor td { background: var(--verde-claro); font-weight: 600; }
+.votos { display: flex; align-items: center; gap: 8px; }
+.votos .barra { height: 10px; border-radius: 5px; background: var(--verde); min-width: 2px; }
+.votos .pista { flex: 1; min-width: 60px; max-width: 160px; background: var(--linea); border-radius: 5px; }
+td.rango { white-space: nowrap; }
+.viejo { opacity: 0.35; }
+.nota-tabla { font-size: 13px; color: var(--suave); margin-top: 6px; }
+h2 { font-size: 18px; margin: 28px 0 6px; }
+svg text { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.nota { font-size: 13px; color: var(--suave); margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>¿Cuántos tractores convienen?</h1>
+  <p class="sub" id="sub">Cargando el modelo…</p>
+  <div class="grid">
+    <section class="panel" aria-label="Valores">
+      <div class="fila">
+        <label for="ha">Tamaño del campo</label>
+        <div class="ha"><input id="ha" type="number" min="1" step="1" value="57"><span>ha</span></div>
+        <input id="ha-rango" type="range" min="0" max="4" step="0.01" aria-label="Tamaño del campo">
+      </div>
+      <div class="fila">
+        <span class="etiqueta" id="mecs-titulo">Mecanismo de coordinación</span>
+        <div class="mecs" id="mecs" role="group" aria-labelledby="mecs-titulo"></div>
+      </div>
+      <details id="detalles">
+        <summary>Precios y supuestos</summary>
+        <div id="params"></div>
+        <button class="link" id="restablecer" type="button">Restablecer valores base</button>
+      </details>
+    </section>
+    <section class="panel">
+      <div class="error" id="error" role="alert" hidden></div>
+      <div id="resultado">
+      <div role="status" aria-live="polite">
+        <div class="suave" id="resp-titulo">Conviene</div>
+        <div class="resp-n" id="resp-n">—</div>
+        <div class="resp-costo" id="resp-costo"></div>
+        <div class="suave" id="resp-p"></div>
+        <div class="suave" id="resp-sig"></div>
+        <div class="aviso" id="aviso" hidden></div>
+      </div>
+      <h2>Costo por hectárea según el número de tractores</h2>
+      <div class="tabla"><table>
+        <thead><tr><th>Tractores</th><th class="num">Costo por ha</th><th class="num">Rango 95 %</th><th id="th-votos">Probabilidad de ser el más barato</th></tr></thead>
+        <tbody id="tabla"></tbody>
+      </table></div>
+      <div class="nota-tabla" id="nota-tabla" hidden></div>
+      <h2>Cuántos tractores convienen en cada tamaño (con estos precios)</h2>
+      <svg id="franja" viewBox="0 0 1000 80" width="100%" role="img" aria-label="Número recomendado de tractores por tamaño de campo"></svg>
+      <div class="suave" id="cruces"></div>
+      </div>
+      <p class="nota">El modelo predice el retraso de la siembra y las horas de motor; el costo (compra de tractores + cosecha perdida por el retraso + reparación + diésel) se calcula después con los precios, así que cambiarlos no requiere simular. El rango 95 % y la probabilidad salen de qué tanto coinciden las predicciones del modelo.</p>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const fmt0 = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
+const fmtG = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 6 });
+const dinero = (x) => "$" + fmt0.format(x);
+const pct = (p) => fmt0.format(100 * p) + " %";
+const tractores = (n) => n + (n === 1 ? " tractor" : " tractores");
+const COLORES = ["--n1", "--n2", "--n3", "--n4", "--n5", "--n6"];
+let INFO = null, mecanismo = null, temporizador = null, peticion = 0, ultima = null;
+
+function el(tag, attrs = {}, texto) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (texto !== undefined) e.textContent = texto;
+  return e;
+}
+function svgEl(tag, attrs = {}, texto) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (texto !== undefined) e.textContent = texto;
+  return e;
+}
+const color = (n) => getComputedStyle(document.documentElement).getPropertyValue(COLORES[Math.min(n, 6) - 1]).trim();
+
+function haActual() { return Number($("#ha").value); }
+function sincronizarRango() {
+  const ha = haActual(), rango = $("#ha-rango");
+  if (ha > 0) rango.value = Math.max(0, Math.min(4, Math.log2(ha / 10)));
+  rango.setAttribute("aria-valuetext", ha > 0 ? `${fmtG.format(ha)} ha` : "sin valor");
+}
+
+function construir() {
+  const [lo, hi] = INFO.rango_hectareas;
+  $("#sub").textContent = `${INFO.modelo} entrenado con ${fmt0.format(INFO.corridas)} corridas válidas de la simulación ` +
+    `(${INFO.configuraciones} configuraciones). Entrenado de ${fmt0.format(lo)} a ${fmt0.format(hi)} ha y de 1 a ${INFO.n_max} tractores.`;
+  $("#ha").max = INFO.ha_maxima;
+  if (INFO.modelo === "Random Forest") $("#th-votos").textContent = "Votos de los árboles";
+  const cont = $("#mecs");
+  for (const m of INFO.mecanismos) {
+    const b = el("button", { type: "button", class: "mec", "aria-pressed": "false", "data-mec": m.clave });
+    b.append(el("b", {}, m.clave), document.createTextNode(" " + m.nombre));
+    b.addEventListener("click", () => elegirMecanismo(m.clave));
+    cont.append(b);
+  }
+  const params = $("#params");
+  for (const p of INFO.parametros) {
+    const id = "p-" + p.clave.replace(/\./g, "-");
+    const caja = el("div", { class: "param" });
+    caja.append(el("label", { for: id }, `${p.etiqueta} (${p.unidad})`));
+    const inp = el("input", { id, type: "number", step: "any", min: p.minimo, max: p.maximo, "data-clave": p.clave });
+    inp.value = p.valor;
+    inp.addEventListener("input", programar);
+    caja.append(inp);
+    let base = "Base: " + fmtG.format(p.valor);
+    if (p.rango_sensibilidad) base += ` · rango estudiado: ${fmtG.format(p.rango_sensibilidad[0])} a ${fmtG.format(p.rango_sensibilidad[1])}`;
+    caja.append(el("div", { class: "base" }, base));
+    params.append(caja);
+  }
+  elegirMecanismo(INFO.mecanismos[0].clave, false);
+  sincronizarRango();
+}
+
+function elegirMecanismo(m, consultarYa = true) {
+  mecanismo = m;
+  document.querySelectorAll(".mec").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mec === m)));
+  if (consultarYa) consultar();
+}
+
+function parametrosCambiados() {
+  const out = {};
+  for (const p of INFO.parametros) {
+    const inp = document.querySelector(`[data-clave="${p.clave}"]`);
+    if (inp.value === "") continue;
+    const v = Number(inp.value);
+    if (v !== Number(p.valor)) out[p.clave] = v;
+  }
+  return out;
+}
+
+function programar() { clearTimeout(temporizador); temporizador = setTimeout(consultar, 180); }
+
+async function consultar() {
+  const id = ++peticion;
+  const cuerpo = { mecanismo, hectareas: haActual(), parametros: parametrosCambiados() };
+  let datos;
+  try {
+    const r = await fetch("/api/predecir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) });
+    datos = await r.json();
+    if (id !== peticion) return;
+    if (!r.ok) { mostrarError(datos.error || "No se pudo consultar el modelo."); return; }
+  } catch (e) {
+    if (id === peticion) mostrarError("No hay conexión con el servidor. ¿Sigue corriendo python -m siembra.interfaz?");
+    return;
+  }
+  $("#error").hidden = true;
+  $("#resultado").classList.remove("viejo");
+  dibujar(datos);
+}
+
+function mostrarError(texto) {
+  const e = $("#error");
+  e.textContent = texto + " Los resultados atenuados son de los valores anteriores.";
+  e.hidden = false;
+  $("#resultado").classList.add("viejo");
+}
+
+function dibujar(r) {
+  const flotas = r.flotas;
+  const mejor = flotas.find((f) => f.n_tractores === r.n_recomendado);
+  const resto = flotas.filter((f) => f !== mejor).sort((a, b) => a.costo_ha - b.costo_ha);
+  $("#resp-titulo").textContent = `Conviene, en ${fmtG.format(r.hectareas)} ha con ${r.mecanismo}`;
+  $("#resp-n").textContent = tractores(r.n_recomendado);
+  $("#resp-costo").textContent = `${dinero(mejor.costo_ha)} por hectárea (rango 95 %: ${dinero(mejor.ic_bajo)} a ${dinero(mejor.ic_alto)})`;
+  $("#resp-p").textContent = INFO.modelo === "Random Forest"
+    ? `${pct(r.p_recomendado)} de los árboles del modelo votan por esta opción.`
+    : `Probabilidad de que sea la opción más barata: ${pct(r.p_recomendado)}.`;
+  const sig = resto[0];
+  let textoSig = "";
+  if (sig) {
+    const dif = 100 * (sig.costo_ha / mejor.costo_ha - 1);
+    textoSig = `Segunda opción: ${tractores(sig.n_tractores)}, ${dinero(sig.costo_ha)} por hectárea (` +
+      (dif < 1 ? `${dinero(sig.costo_ha - mejor.costo_ha)} más: prácticamente empatadas)` : `${fmt0.format(dif)} % más)`) + ".";
+  }
+  const masVotada = flotas.reduce((a, b) => (b.p_optimo > a.p_optimo ? b : a));
+  if (masVotada !== mejor && masVotada.p_optimo > r.p_recomendado) {
+    textoSig += ` Se recomienda la de menor costo promedio, aunque ${tractores(masVotada.n_tractores)} gana en más árboles (${pct(masVotada.p_optimo)}): las dos están casi empatadas.`;
+  }
+  $("#resp-sig").textContent = textoSig;
+
+  const aviso = $("#aviso");
+  const [lo, hi] = r.rango_hectareas;
+  const avisos = [];
+  if (r.fuera_de_rango) {
+    const borde = r.hectareas > hi ? hi : lo;
+    avisos.push(`Fuera de lo entrenado (${fmt0.format(lo)} a ${fmt0.format(hi)} ha). El modelo usa el retraso por hectárea y las horas de motor que vio en ${fmt0.format(borde)} ha y solo escala el costo al tamaño pedido. Nunca se simularon campos así y su rango no refleja esa duda: tómalo como orientación, no como respuesta.`);
+  }
+  if (r.n_recomendado === INFO.n_max) {
+    avisos.push(`La recomendación es el máximo que considera el modelo (${INFO.n_max} tractores). Con más tractores podría convenir todavía más, pero el modelo no los evalúa.`);
+  }
+  aviso.textContent = avisos.join(" ");
+  aviso.hidden = avisos.length === 0;
+
+  const tbody = $("#tabla");
+  tbody.replaceChildren();
+  for (const f of flotas) {
+    const tr = el("tr", f.n_tractores === r.n_recomendado ? { class: "mejor" } : {});
+    tr.append(el("td", {}, String(f.n_tractores) + (f.extrapolado ? " †" : "")));
+    tr.append(el("td", { class: "num" }, dinero(f.costo_ha)));
+    tr.append(el("td", { class: "num rango" }, `${dinero(f.ic_bajo)} a ${dinero(f.ic_alto)}`));
+    const td = el("td");
+    const v = el("div", { class: "votos" });
+    const pista = el("div", { class: "pista" });
+    const barra = el("div", { class: "barra" });
+    barra.style.width = (100 * f.p_optimo) + "%";
+    pista.append(barra);
+    v.append(pista, el("span", {}, pct(f.p_optimo)));
+    td.append(v);
+    tr.append(td);
+    tbody.append(tr);
+  }
+  const fuera = flotas.filter((f) => f.costo_ha < f.ic_bajo || f.costo_ha > f.ic_alto).map((f) => f.n_tractores);
+  const nota = $("#nota-tabla");
+  nota.textContent = fuera.length ? `Con ${fuera.join(", ")} tractor${fuera.length > 1 || fuera[0] !== 1 ? "es" : ""}, el costo promedio queda fuera de su rango 95 %: unos pocos árboles predicen costos muy altos y jalan el promedio.` : "";
+  nota.hidden = !fuera.length;
+  ultima = r;
+  dibujarFranja(r);
+}
+
+function dibujarFranja(r) {
+  const svg = $("#franja");
+  svg.replaceChildren();
+  const datos = r.por_tamano;
+  if (!datos.length) return;
+  const [lo, hi] = r.rango_hectareas;
+  const W = Math.max(280, Math.round(svg.getBoundingClientRect().width) || 1000);
+  svg.setAttribute("viewBox", `0 0 ${W} 80`);
+  const X0 = 6, X1 = W - 6, Y = 10, H = 36;
+  const x = (ha) => X0 + (X1 - X0) * (Math.log(ha) - Math.log(lo)) / (Math.log(hi) - Math.log(lo));
+  // tramos con el mismo N recomendado; el borde entre dos tamaños enteros va a media hectárea
+  const tramos = [];
+  for (const d of datos) {
+    const ult = tramos[tramos.length - 1];
+    if (ult && ult.n === d.n_optimo) ult.hasta = d.hectareas;
+    else tramos.push({ n: d.n_optimo, desde: d.hectareas, hasta: d.hectareas });
+  }
+  const cambios = [];
+  tramos.forEach((t, i) => {
+    const a = i === 0 ? lo : (tramos[i - 1].hasta + t.desde) / 2;
+    const b = i === tramos.length - 1 ? hi : (t.hasta + tramos[i + 1].desde) / 2;
+    const xa = x(a), xb = x(b);
+    svg.append(svgEl("rect", { x: xa, y: Y, width: Math.max(0.5, xb - xa), height: H, fill: color(t.n) }));
+    if (xb - xa > 14) svg.append(svgEl("text", { x: (xa + xb) / 2, y: Y + H / 2 + 5, "text-anchor": "middle",
+      fill: t.n >= 4 ? "#F5F3EC" : "#14271C", "font-weight": "700" }, String(t.n)));
+    if (i > 0) cambios.push(`${fmt0.format(tramos[i - 1].hasta)}–${fmt0.format(t.desde)} ha (${tramos[i - 1].n} → ${t.n})`);
+  });
+  for (const t of [10, 20, 40, 80, 160]) {
+    if (t < lo || t > hi) continue;
+    svg.append(svgEl("text", { x: x(t), y: Y + H + 20, "text-anchor": t === lo ? "start" : t === hi ? "end" : "middle", fill: "currentColor" }, `${t} ha`));
+  }
+  const haSel = Math.min(Math.max(r.hectareas, lo), hi);
+  const xm = x(haSel);
+  svg.append(svgEl("line", { x1: xm, x2: xm, y1: Y - 6, y2: Y + H + 4, stroke: "currentColor", "stroke-width": 3 }));
+  svg.append(svgEl("polygon", { points: `${xm - 6},${Y - 8} ${xm + 6},${Y - 8} ${xm},${Y}`, fill: "currentColor" }));
+  $("#cruces").textContent = cambios.length ? "Cambia entre: " + cambios.join(" · ") : "El mismo número de tractores en todo el rango.";
+}
+
+$("#ha").addEventListener("input", () => { sincronizarRango(); programar(); });
+$("#ha-rango").addEventListener("input", (e) => { $("#ha").value = Math.round(10 * 2 ** Number(e.target.value)); sincronizarRango(); programar(); });
+$("#ha-rango").addEventListener("keydown", (e) => {
+  // Con el teclado, cada flecha cambia 1 ha (la escala logarítmica casi no avanza en campos chicos)
+  const paso = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 10, PageDown: -10 }[e.key];
+  if (!paso) return;
+  e.preventDefault();
+  $("#ha").value = Math.min(INFO.ha_maxima, Math.max(1, Math.round(haActual() || 10) + paso));
+  sincronizarRango();
+  programar();
+});
+window.addEventListener("resize", () => { if (ultima) dibujarFranja(ultima); });
+$("#restablecer").addEventListener("click", () => {
+  for (const p of INFO.parametros) document.querySelector(`[data-clave="${p.clave}"]`).value = p.valor;
+  consultar();
+});
+
+(async () => {
+  try {
+    INFO = await (await fetch("/api/info")).json();
+  } catch (e) {
+    $("#sub").textContent = "No hay conexión con el servidor. Corre: python -m siembra.interfaz";
+    return;
+  }
+  const q = new URLSearchParams(location.search);
+  const haQ = Number(q.get("ha"));
+  if (haQ > 0) $("#ha").value = haQ;
+  construir();
+  const mecQ = (q.get("mecanismo") || "").toUpperCase();
+  if (INFO.mecanismos.some((m) => m.clave === mecQ)) elegirMecanismo(mecQ, false);
+  consultar();
+})();
+</script>
+</body>
+</html>

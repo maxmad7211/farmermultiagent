@@ -14,6 +14,9 @@ __pycache__/
 # python correr_todo.py. Los CSV y las figuras de resultados/ sí se versionan porque son
 # pequeños y el dashboard los necesita.
 resultados/corridas/
+# Modelo sustituto entrenado: binario de 3.6 MB que se regenera igual en segundos con
+# python -m siembra.sustituto --guardar-modelo (la interfaz lo hace sola si falta)
+resultados/sustituto/modelo.joblib
 # Bitácora de errores de cada ejecución (se le agrega un encabezado aunque no haya errores)
 resultados/errores.log
 

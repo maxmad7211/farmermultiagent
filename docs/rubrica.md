@@ -86,6 +86,18 @@ Paneles que prometió la propuesta (pp. 16–17) y la función de `siembra/viz.p
 | Experimental | ¿En qué se va el tiempo de la flota? | `viz.barras_actividad` | `escenarios.csv` |
 | Experimental | ¿Qué parámetro pesa más? | `viz.tornado`, `viz.sens_arquitectura` | `metricas.sensibilidad_economica`, `sens_arquitectura.csv` |
 
+## Componente de machine learning
+
+| Lo que pide | Dónde se cubre | Estado |
+|---|---|---|
+| Un componente de machine learning útil para la pregunta central | Modelo sustituto que da el N óptimo en cualquier tamaño de campo de 10 a 160 ha, con su incertidumbre. Por defecto es un Random Forest (300 árboles; la incertidumbre sale de la dispersión entre árboles); con `--modelo gp`, un proceso gaussiano: `siembra/sustituto.py` (`SustitutoRF`, `SustitutoGP`, `crear`), [`sustituto.md`](sustituto.md) | Listo |
+| Elección del modelo | `herramientas/comparar_modelos.py` → `resultados/sustituto/comparacion_modelos.csv`: 7 métodos del documento del curso ("13 Métodos Completos de ML para Tractores Agrícolas"; LightGBM con su equivalente de scikit-learn, `HistGradientBoostingRegressor`) y el proceso gaussiano, con los mismos datos y la misma prueba, sin ajustar nada mirando la prueba. Los 8 aciertan el N óptimo en 29 de 30 casos. El árbol de decisión (0.84 %) y Gradient Boosting (0.89 %) tienen menos error que Random Forest (1.05 %; la comparación usa la predicción media de los árboles, por eso difiere un poco del 1.06 % de `evaluacion.csv`), pero no dan incertidumbre; Random Forest es el único método del documento que la da, y el aprendizaje activo la necesita. XGBoost no se probó (no está instalado) | Listo |
+| Datos de entrenamiento y diseño de la recolección | Barrido (60 puntos) + aprendizaje activo (75 puntos, 375 corridas en 4 rondas; simula donde el modelo más duda cuál N gana): `sustituto.proponer`, `sustituto.aprendizaje_activo`, `resultados/sustituto/activo.csv` | Listo |
+| Evaluación con datos que el modelo no vio | Conjunto de prueba al azar (10 tamaños, 540 corridas) y verificación prospectiva por ronda: `sustituto.evaluar`, `evaluacion.csv`, `verificacion.csv`, gráfica `ml_evaluacion.png`. Modelo con barrido + aprendizaje activo: error absoluto medio de 1.06 % y 29 de 30 N óptimos acertados; en la verificación el error baja de 3.98 % en la primera ronda a 0.79 % en la cuarta | Listo |
+| Resultados y su interpretación | Cambios de N con IC 95 %, 5 y 6 tractores en la prueba (136 y 139 ha, siempre más caros que el mejor N), mapas económicos: sección 5 del dashboard, [`sustituto.md` §3](sustituto.md#3-resultados), [`analisis_critico.md` §1.1](analisis_critico.md#11-pregunta-central-cuántos-tractores-por-hectárea) | Listo |
+| Limitaciones | [`sustituto.md` §4](sustituto.md#4-limitaciones). Los intervalos de Random Forest son estrechos y menos calibrados: el costo simulado cae dentro de su IC 95 % en 75 % de los casos, contra 90 % del proceso gaussiano con los mismos datos. El aprendizaje activo solo simuló flotas de 1 a 4 tractores, así que 5 y 6 tractores en 160 ha no se confirmaron con corridas. 18 de las 915 corridas nuevas se atoraron y no se usan ([`analisis_critico.md` §4.4](analisis_critico.md#44-observados-en-las-corridas)) | Listo |
+| Pruebas | `tests/test_sustituto.py` (simulador analítico de costo conocido, con Random Forest y con proceso gaussiano) | Listo |
+
 ## Competencias ("Qué queremos aprender", propuesta p. 15)
 
 | Habilidad | Cómo dijimos que la demostraríamos | Evidencia | Estado |

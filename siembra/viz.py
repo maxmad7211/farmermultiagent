@@ -2192,3 +2192,248 @@ def sens_arquitectura(df_sens_arq, metricas=None, fila_costo=True, fig=None):
     _titulo_fig(fig, "Sensibilidad de la arquitectura: cada parámetro contra la métrica que debería mover",
                 f"Media de {n} semillas por punto; banda: IC 95 % · " + _condiciones_comunes(d))
     return fig
+
+
+# ============================================================ modelo sustituto (machine learning)
+
+# N es ordinal: una sola tonalidad de claro (1 tractor) a oscuro (6 tractores)
+_COLORES_N = ("#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#0d366b", "#081f3d")
+_TICKS_HA = (10, 20, 40, 80, 160, 320)
+
+
+def color_n(n):
+    """Color del número de tractores N (rampa de azules)."""
+    n = int(n)
+    return _COLORES_N[min(max(n, 1), len(_COLORES_N)) - 1]
+
+
+def _tinta_sobre(n):
+    return SUPERFICIE if int(n) >= 4 else TINTA
+
+
+def _eje_hectareas(ax, ha_min, ha_max):
+    ax.set_xscale("log")
+    ticks = [t for t in _TICKS_HA if ha_min * 0.99 <= t <= ha_max * 1.01]
+    ax.set_xticks(ticks, [f"{t:g}" for t in ticks])
+    ax.xaxis.set_minor_locator(mpl.ticker.NullLocator())
+    ax.set_xlim(ha_min, ha_max)
+
+
+_TICKS_DINERO = (1000, 1500, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000)
+
+
+def _ticks_dinero(eje, lo, hi):
+    """Marcas legibles en un eje logarítmico de pesos."""
+    eje.set_major_locator(mpl.ticker.FixedLocator([t for t in _TICKS_DINERO if lo <= t <= hi]))
+    eje.set_major_formatter(FuncFormatter(lambda v, _p: _dinero(v)))
+    eje.set_minor_locator(mpl.ticker.NullLocator())
+
+
+def _leyenda_n(ns, extra=()):
+    return [Patch(fc=color_n(n), ec="none", label=f"N = {n}") for n in ns] + list(extra)
+
+
+def sustituto_optimo(optimo, cruces=None, observado=None, fig=None):
+    """Probabilidad de que cada N sea el óptimo contra el tamaño de campo (área apilada), una fila
+    por mecanismo, con los cambios de N óptimo (línea y banda IC 95 %) y el óptimo observado en
+    los tamaños del barrido.
+
+    ``optimo``: tabla ``optimo`` de ``siembra.sustituto.analizar``; ``cruces``: tabla ``cruces``;
+    ``observado``: ``metricas.optimo_por_campo(barrido)`` (opcional).
+    """
+    d = optimo.copy()
+    mecs = _mecanismos(d)
+    pcols = sorted((c for c in d.columns if c.startswith("p_N")), key=lambda c: int(c[3:]))
+    ns_todos = [int(c[3:]) for c in pcols]
+    if fig is None:
+        fig = plt.figure(figsize=(10, 2.35 * len(mecs) + 1.0), layout="constrained")
+    axs = fig.subplots(len(mecs), 1, sharex=True, squeeze=False).ravel()
+    ha_min, ha_max = float(d["hectareas"].min()), float(d["hectareas"].max())
+    usados = set()
+    for ax, mec in zip(axs, mecs):
+        g = d[d["mecanismo"].astype(str) == mec].sort_values("hectareas")
+        ha = g["hectareas"].to_numpy(dtype=float)
+        ps = np.array([g[c].to_numpy(dtype=float) for c in pcols])
+        visibles = [i for i in range(len(pcols)) if ps[i].max() > 0.005]
+        usados |= {ns_todos[i] for i in visibles}
+        ax.stackplot(ha, ps[visibles], colors=[color_n(ns_todos[i]) for i in visibles], lw=0)
+        # Etiqueta "N = k" en el centro de cada tramo donde k es el óptimo
+        n_opt = g["n_optimo"].to_numpy(dtype=int)
+        cortes = np.flatnonzero(np.diff(n_opt)) + 1
+        for tramo in np.split(np.arange(len(ha)), cortes):
+            if len(tramo) < 3:
+                continue
+            i = tramo[len(tramo) // 2]
+            n = n_opt[i]
+            j = ns_todos.index(n)
+            y = ps[:j, i].sum() + ps[j, i] / 2
+            ax.text(math.sqrt(ha[tramo[0]] * ha[tramo[-1]]), y, f"N = {n}", ha="center", va="center",
+                    fontsize=9, fontweight="semibold", color=_tinta_sobre(n))
+        if cruces is not None and len(cruces):
+            nivel, previo = 0, None
+            cm = cruces[cruces["mecanismo"].astype(str) == mec].sort_values("hectareas")
+            for _, c in cm.iterrows():
+                # Etiquetas escalonadas cuando dos cambios quedan a menos de ~25 % de distancia
+                cerca = previo is not None and math.log(c["hectareas"] / previo) < 0.22
+                nivel = (nivel + 1) % 4 if cerca else 0
+                previo = c["hectareas"]
+                ax.axvspan(c["ic_bajo"], c["ic_alto"], color=TINTA, alpha=0.14, lw=0, zorder=3)
+                ax.axvline(c["hectareas"], color=TINTA, lw=1.0, ls=(0, (4, 2)), zorder=4)
+                ax.annotate(f"{int(c['n_de'])} a {int(c['n_a'])}: {c['hectareas']:.0f} ha",
+                            (c["hectareas"], 0.97 - 0.13 * nivel),
+                            xytext=(3, 0), textcoords="offset points", ha="left", va="top", fontsize=7.5,
+                            color=TINTA, path_effects=_HALO, zorder=5)
+        if observado is not None and len(observado):
+            o = observado[observado["mecanismo"].astype(str) == mec]
+            for _, r in o.iterrows():
+                ax.plot([r["hectareas"]], [1.07], marker="v", ms=7, mfc=color_n(r["n_optimo"]), mec=TINTA,
+                        mew=0.8, ls="", clip_on=False, zorder=6)
+                ax.annotate(f"{int(r['n_optimo'])}", (r["hectareas"], 1.07), xytext=(0, 5), textcoords="offset points",
+                            ha="center", va="bottom", fontsize=7.5, color=TINTA, annotation_clip=False)
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0, 0.5, 1], ["0", "50 %", "100 %"])
+        ax.set_ylabel("P(N es el óptimo)")
+        ax.grid(False)
+        _titulo_ax(ax, NOMBRE_MECANISMO.get(mec, mec), tam=10, extra=22)
+    _eje_hectareas(axs[-1], ha_min, ha_max)
+    axs[-1].set_xlabel("Tamaño del campo (ha, escala logarítmica)")
+    extra = [Patch(fc=TINTA, alpha=0.14, ec="none", label="Cambio de N óptimo (IC 95 %)")]
+    if observado is not None and len(observado):
+        extra.append(Line2D([], [], marker="v", ls="", ms=7, mfc=FONDO_TARJETA, mec=TINTA, mew=0.8,
+                            label="Óptimo observado en el barrido"))
+    fig.legend(handles=_leyenda_n(sorted(usados), extra), loc="outside lower center",
+               ncols=min(8, len(usados) + len(extra)))
+    _titulo_fig(fig, "¿Cuántos tractores por hectárea? N óptimo según el modelo sustituto",
+                "Probabilidad de que cada N tenga el menor costo por hectárea, a partir de las muestras del "
+                "modelo (árboles del Random Forest o posterior del proceso gaussiano); las etiquetas marcan el "
+                "N con menor costo esperado")
+    return fig
+
+
+def sustituto_costos(curva, observados=None, fig=None):
+    """Costo por hectárea predicho contra el tamaño de campo, una línea por N (banda IC 95 %),
+    un panel por mecanismo, con los puntos simulados encima. Las N que el modelo no ha visto
+    simuladas para ese mecanismo van punteadas.
+
+    ``observados``: tabla de ``siembra.sustituto.preparar`` (``costo_obs`` y ``costo_obs_ic``).
+    """
+    d = curva.copy()
+    mecs = _mecanismos(d)
+    if fig is None:
+        fig = plt.figure(figsize=(4.3 * len(mecs), 4.3), layout="constrained")
+    axs = fig.subplots(1, len(mecs), sharey=True, squeeze=False).ravel()
+    ns = sorted(int(n) for n in d["n_tractores"].unique())
+    env = d.groupby(["mecanismo", "hectareas"])["costo_ha"].min()
+    lo, hi = env.min() * 0.92, env.max() * 1.35
+    ha_min, ha_max = float(d["hectareas"].min()), float(d["hectareas"].max())
+    for ax, mec in zip(axs, mecs):
+        g = d[d["mecanismo"].astype(str) == mec]
+        for n in ns:
+            s = g[g["n_tractores"] == n].sort_values("hectareas")
+            if len(s) == 0:
+                continue
+            ext = bool(s["extrapolado"].astype(str).str.lower().eq("true").any())
+            ax.fill_between(s["hectareas"], s["ic_bajo"], s["ic_alto"], color=color_n(n), alpha=0.25, lw=0)
+            ax.plot(s["hectareas"], s["costo_ha"], color=color_n(n), lw=1.6, ls=(0, (3, 2)) if ext else "-")
+        e = env.loc[mec]
+        ax.plot(e.index, e.values, color=TINTA, lw=0.9, zorder=4)
+        if observados is not None and len(observados):
+            o = observados[observados["mecanismo"].astype(str) == mec]
+            for n in ns:
+                oo = o[o["n_tractores"] == n]
+                if len(oo):
+                    ax.errorbar(oo["hectareas"], oo["costo_obs"], yerr=oo["costo_obs_ic"].fillna(0), fmt="o", ms=4,
+                                mfc=color_n(n), mec=TINTA, mew=0.6, ecolor=TINTA_2, elinewidth=0.8, zorder=5)
+        ax.set_yscale("log")
+        ax.set_ylim(lo, hi)
+        _ticks_dinero(ax.yaxis, lo, hi)
+        _eje_hectareas(ax, ha_min, ha_max)
+        ax.set_xlabel("Tamaño del campo (ha)")
+        ax.set_title(NOMBRE_MECANISMO.get(mec, mec), fontsize=10)
+    axs[0].set_ylabel(ETIQUETA["costo_ha"] + ", escala log")
+    extra = [Line2D([], [], color=TINTA, lw=0.9, label="Mínimo sobre N"),
+             Line2D([], [], color=TINTA_3, lw=1.6, ls=(0, (3, 2)), label="N sin corridas en el entrenamiento"),
+             Line2D([], [], marker="o", ls="", ms=4, mfc=FONDO_TARJETA, mec=TINTA, mew=0.6,
+                    label="Simulado (media ± IC 95 %)")]
+    fig.legend(handles=_leyenda_n(ns, extra), loc="outside lower center", ncols=min(6, len(ns) + len(extra)))
+    _titulo_fig(fig, "Costo por hectárea predicho por el modelo sustituto",
+                "Línea: costo esperado; banda: IC 95 % del modelo; el eje vertical está recortado alrededor "
+                "del mínimo para que se vean los cruces")
+    return fig
+
+
+def sustituto_evaluacion(detalle, verificacion=None, fig=None):
+    """Costo predicho contra observado en corridas que el modelo no vio: un panel por modelo
+    (solo barrido, barrido + activo) y, si se pasa, la verificación prospectiva del aprendizaje
+    activo (predicción hecha antes de simular cada punto)."""
+    paneles = [(m, detalle[detalle["modelo"] == m]) for m in pd.unique(detalle["modelo"])]
+    if verificacion is not None and len(verificacion):
+        paneles.append(("verificación prospectiva (aprendizaje activo)", verificacion))
+    if fig is None:
+        fig = plt.figure(figsize=(4.0 * len(paneles), 4.2), layout="constrained")
+    axs = fig.subplots(1, len(paneles), squeeze=False).ravel()
+    todos = pd.concat([p[["costo_obs", "costo_pred"]] for _, p in paneles])
+    lo, hi = np.nanmin(todos.values) * 0.9, np.nanmax(todos.values) * 1.1
+    for ax, (titulo, p) in zip(axs, paneles):
+        p = p.dropna(subset=["costo_obs", "costo_pred"])
+        ax.plot([lo, hi], [lo, hi], color=EJE, lw=1, zorder=1)
+        for mec in _mecanismos(p):
+            q = p[p["mecanismo"].astype(str) == mec]
+            yerr = np.vstack([q["costo_pred"] - q["ic_bajo"], q["ic_alto"] - q["costo_pred"]]).clip(min=0)
+            ax.errorbar(q["costo_obs"], q["costo_pred"], yerr=yerr, fmt="o", ms=3.5, color=_color_mecanismo(mec),
+                        mec=SUPERFICIE, mew=0.4, elinewidth=0.6, alpha=0.85, zorder=3)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(lo, hi)
+        for eje in (ax.xaxis, ax.yaxis):
+            _ticks_dinero(eje, lo, hi)
+        ax.set_xlabel("Costo simulado ($/ha)")
+        error = p["error_pct"].abs().mean()
+        cob = p["dentro_ic"].astype(str).str.lower().eq("true").mean()
+        ax.text(0.03, 0.97, f"error absoluto medio {error:.1f} %\ndentro del IC 95 %: {100 * cob:.0f} %\n"
+                f"{len(p)} puntos", transform=ax.transAxes, ha="left", va="top", fontsize=8, color=TINTA,
+                bbox=dict(boxstyle="round,pad=0.35", fc=FONDO_TARJETA, ec="none"))
+        ax.set_title(titulo.capitalize(), fontsize=10)
+    axs[0].set_ylabel("Costo predicho ($/ha)")
+    fig.legend(handles=_leyenda_mecanismos(_mecanismos(detalle), marcador=True), loc="outside lower center",
+               ncols=3)
+    _titulo_fig(fig, "¿Qué tan bien predice el modelo sustituto? Predicho contra simulado",
+                "Corridas que el modelo no usó para entrenar; barra vertical: IC 95 % predicho; línea gris: "
+                "predicción perfecta")
+    return fig
+
+
+def sustituto_mapa(mapa, parametro, base=None, fig=None):
+    """N óptimo según el tamaño de campo y un parámetro económico, un panel por mecanismo.
+
+    ``mapa``: tabla ``mapa`` de ``siembra.sustituto.analizar``; ``base``: valor del caso base
+    (se marca con una línea)."""
+    d = mapa[mapa["parametro"] == parametro]
+    mecs = _mecanismos(d)
+    if fig is None:
+        fig = plt.figure(figsize=(4.3 * len(mecs), 3.4), layout="constrained")
+    axs = fig.subplots(1, len(mecs), sharey=True, squeeze=False).ravel()
+    ns = sorted(int(n) for n in d["n_optimo"].unique())
+    cmap = mcolors.ListedColormap([color_n(n) for n in range(1, max(ns) + 1)])
+    norm = mcolors.BoundaryNorm(np.arange(0.5, max(ns) + 1.5), cmap.N)
+    corto = parametro.split(".")[-1]
+    for ax, mec in zip(axs, mecs):
+        g = d[d["mecanismo"].astype(str) == mec].pivot_table(index="valor", columns="hectareas", values="n_optimo")
+        ha, val = g.columns.to_numpy(dtype=float), g.index.to_numpy(dtype=float)
+        dv = np.diff(val).mean() if len(val) > 1 else 1.0
+        ax.pcolormesh(np.r_[ha, ha[-1] + 1] - 0.5, np.r_[val - dv / 2, val[-1] + dv / 2], g.values,
+                      cmap=cmap, norm=norm, shading="flat")
+        if base is not None:
+            ax.axhline(base, color=TINTA, lw=1, ls=(0, (4, 2)))
+        _eje_hectareas(ax, ha.min(), ha.max())
+        ax.grid(False)
+        ax.set_xlabel("Tamaño del campo (ha)")
+        ax.set_title(NOMBRE_MECANISMO.get(mec, mec), fontsize=10)
+    axs[0].set_ylabel(NOMBRE_PARAMETRO_ECO.get(corto, corto))
+    extra = [Line2D([], [], color=TINTA, lw=1, ls=(0, (4, 2)), label="Caso base")] if base is not None else []
+    fig.legend(handles=_leyenda_n(ns, extra), loc="outside lower center", ncols=len(ns) + len(extra))
+    _titulo_fig(fig, f"N óptimo según el tamaño de campo y {NOMBRE_PARAMETRO_ECO.get(corto, corto).lower()}",
+                "Costo esperado del modelo sustituto; el parámetro solo cambia la función de costo, así que no "
+                "hace falta volver a simular")
+    return fig
