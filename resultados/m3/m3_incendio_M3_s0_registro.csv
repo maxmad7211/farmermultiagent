@@ -1,0 +1,203 @@
+t,hora,fuente,tipo,tractor,texto,motivo
+468,1.71,mundo,evento,,"Empieza un incendio en [38, 16]",
+495,1.81,coordinador,decision,,Confirma un incendio (6 celda(s)); marca zona prohibida y avisa a todos,lo vio desde arriba en su revisión
+495,1.81,coordinador,subasta,,"Subasta urgente para apagar en [36, 16], invita a T1, T2, T3, T4",
+495,1.81,coordinador,aviso,,Avisa a todos la zona prohibida (16 celdas),
+500,1.83,coordinador,decision,T3,"Subasta de apagar, gana T3 con costo 111.8 (llega en 85 pasos, deja 22 celdas a medias, diésel 93 %, riesgo 0.04). Otras ofertas, T4 con costo 118.6 (llega en 113 pasos, deja 0 celdas a medias, diésel 89 %, riesgo 0.00); T2 con costo 121.6 (llega en 71 pasos, deja 37 celdas a medias, diésel 73 %, riesgo 0.00); T1 con costo 124.5 (llega en 76 pasos, deja 35 celdas a medias, diésel 73 %, riesgo 0.00)",T3 llega 28 pasos antes que T4
+540,1.97,coordinador,aviso,,Suma 12 celda(s) al incendio (15 en total) y actualiza la zona,lo vio desde arriba en su revisión
+540,1.97,coordinador,plan,,"El fuego crece más rápido de lo esperado (6 -> 15 celdas), agranda la zona prohibida (margen 2)",el fuego creció más que el factor de crecimiento_fuego
+565,2.07,coordinador,aviso,T2,"T2 reporta incendio en [[33, 17]]",
+565,2.07,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+570,2.08,coordinador,aviso,,Suma 23 celda(s) al incendio (33 en total) y actualiza la zona,lo vio desde arriba en su revisión
+570,2.08,coordinador,decision,T2,"Confirma el reporte de T2 (incendio en [33, 17])",lo vio hace poco y sí hay algo
+570,2.08,coordinador,plan,,El fuego crece más rápido de lo esperado (15 -> 33 celdas),el fuego creció más que el factor de crecimiento_fuego
+573,2.09,coordinador,aviso,T2,"T2 reporta incendio en [[33, 18]]",
+573,2.09,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+585,2.14,coordinador,aviso,,Suma 9 celda(s) al incendio (38 en total) y actualiza la zona,lo vio desde arriba en su revisión
+585,2.14,coordinador,decision,T2,"Confirma el reporte de T2 (incendio en [33, 18])",lo vio hace poco y sí hay algo
+605,2.21,coordinador,aviso,T3,"T3 reporta incendio en [[33, 14]]",
+605,2.21,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+607,2.22,coordinador,aviso,T3,"T3 reporta incendio en [[32, 16]]",
+607,2.22,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+615,2.25,coordinador,aviso,,Suma 18 celda(s) al incendio (35 en total) y actualiza la zona,lo vio desde arriba en su revisión
+615,2.25,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [33, 14])",lo vio hace poco — ya se quemó y no arde
+615,2.25,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [32, 16])",lo vio hace poco — ya se quemó y no arde
+630,2.3,coordinador,aviso,,Suma 17 celda(s) al incendio (40 en total) y actualiza la zona,lo vio desde arriba en su revisión
+666,2.43,coordinador,aviso,T3,"T3 reporta incendio en [[39, 11], [40, 12]]",
+666,2.43,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+670,2.45,coordinador,aviso,T3,"T3 reporta incendio en [[40, 11]]",
+670,2.45,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+675,2.47,coordinador,aviso,,Suma 62 celda(s) al incendio (73 en total) y actualiza la zona,lo vio desde arriba en su revisión
+675,2.47,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [39, 11])",lo vio hace poco — ya se quemó y no arde
+675,2.47,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [40, 11])",lo vio hace poco — ya se quemó y no arde
+675,2.47,coordinador,plan,,El fuego crece más rápido de lo esperado (33 -> 73 celdas),el fuego creció más que el factor de crecimiento_fuego
+680,2.49,coordinador,aviso,T4,"T4 reporta incendio en [[30, 19]]",
+680,2.49,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+689,2.52,coordinador,aviso,T4,"T4 reporta incendio en [[31, 18]]",
+689,2.52,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+690,2.52,coordinador,aviso,,Suma 17 celda(s) al incendio (73 en total) y actualiza la zona,lo vio desde arriba en su revisión
+690,2.52,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [30, 19])",lo vio hace poco y sí hay algo
+690,2.52,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [31, 18])",lo vio hace poco y sí hay algo
+697,2.55,coordinador,aviso,T4,"T4 reporta incendio en [[30, 18]]",
+697,2.55,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+705,2.58,coordinador,aviso,,Suma 11 celda(s) al incendio (62 en total) y actualiza la zona,lo vio desde arriba en su revisión
+705,2.58,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [30, 18])",lo vio hace poco y sí hay algo
+717,2.62,coordinador,aviso,T4,"T4 reporta incendio en [[29, 18]]",
+717,2.62,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+720,2.63,coordinador,aviso,,Suma 19 celda(s) al incendio (60 en total) y actualiza la zona,lo vio desde arriba en su revisión
+720,2.63,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [29, 18])",lo vio hace poco y sí hay algo
+721,2.64,coordinador,aviso,T4,"T4 reporta incendio en [[30, 17]]",
+721,2.64,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [30, 17])",lo vio hace poco y sí hay algo
+723,2.64,coordinador,aviso,T4,"T4 reporta incendio en [[29, 17]]",
+723,2.64,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+735,2.69,coordinador,aviso,,Suma 3 celda(s) al incendio (55 en total) y actualiza la zona,lo vio desde arriba en su revisión
+735,2.69,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [29, 17])",lo vio hace poco y sí hay algo
+736,2.69,coordinador,aviso,T4,"T4 reporta incendio en [[27, 19]]",
+736,2.69,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [27, 19])",lo vio hace poco y sí hay algo
+750,2.74,coordinador,aviso,,Suma 1 celda(s) al incendio (56 en total) y actualiza la zona,lo vio desde arriba en su revisión
+764,2.79,coordinador,aviso,T2,"T2 reporta incendio en [[32, 17]]",
+764,2.79,coordinador,aviso,T4,"T4 reporta incendio en [[26, 19]]",
+764,2.79,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+764,2.79,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+765,2.8,coordinador,aviso,,Suma 34 celda(s) al incendio (55 en total) y actualiza la zona,lo vio desde arriba en su revisión
+765,2.8,coordinador,decision,T2,"Confirma el reporte de T2 (incendio en [32, 17])",lo vio hace poco y sí hay algo
+765,2.8,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [26, 19])",lo vio hace poco y sí hay algo
+788,2.88,coordinador,aviso,T3,"T3 reporta incendio en [[35, 25]]",
+788,2.88,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+795,2.91,coordinador,aviso,,Suma 40 celda(s) al incendio (59 en total) y actualiza la zona,lo vio desde arriba en su revisión
+795,2.91,coordinador,decision,T3,"Confirma el reporte de T3 (incendio en [35, 25])",lo vio hace poco y sí hay algo
+810,2.96,coordinador,aviso,,Suma 9 celda(s) al incendio (63 en total) y actualiza la zona,lo vio desde arriba en su revisión
+840,3.07,coordinador,aviso,,Suma 31 celda(s) al incendio (83 en total) y actualiza la zona,lo vio desde arriba en su revisión
+855,3.12,coordinador,aviso,,Suma 35 celda(s) al incendio (82 en total) y actualiza la zona,lo vio desde arriba en su revisión
+857,3.13,coordinador,aviso,T4,"T4 reporta incendio en [[31, 14]]",
+857,3.13,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+862,3.15,coordinador,aviso,T3,"T3 reporta incendio en [[22, 16], [23, 15]]",
+862,3.15,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+864,3.16,coordinador,aviso,T3,"T3 reporta incendio en [[22, 17], [23, 16]]",
+864,3.16,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+865,3.16,coordinador,aviso,T3,"T3 reporta incendio en [[21, 16]]",
+865,3.16,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+867,3.17,coordinador,aviso,T3,"T3 reporta incendio en [[22, 18]]",
+867,3.17,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+869,3.18,coordinador,aviso,T3,"T3 reporta incendio en [[21, 18]]",
+869,3.18,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+870,3.18,coordinador,aviso,,Suma 47 celda(s) al incendio (100 en total) y actualiza la zona,lo vio desde arriba en su revisión
+870,3.18,coordinador,decision,T4,"Confirma el reporte de T4 (incendio en [31, 14])",lo vio hace poco y sí hay algo
+870,3.18,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [22, 16])",lo vio hace poco — ya se quemó y no arde
+870,3.18,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [22, 17])",lo vio hace poco — ya se quemó y no arde
+870,3.18,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [21, 16])",lo vio hace poco — ya se quemó y no arde
+870,3.18,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [22, 18])",lo vio hace poco — ya se quemó y no arde
+870,3.18,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [21, 18])",lo vio hace poco — ya se quemó y no arde
+879,3.21,coordinador,aviso,T3,"T3 reporta incendio en [[24, 17]]",
+879,3.21,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+885,3.23,coordinador,aviso,,Suma 10 celda(s) al incendio (94 en total) y actualiza la zona,lo vio desde arriba en su revisión
+885,3.23,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [24, 17])",lo vio hace poco — ya se quemó y no arde
+897,3.28,coordinador,aviso,T3,"T3 reporta incendio en [[20, 25]]",
+897,3.28,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+900,3.29,coordinador,aviso,,Suma 37 celda(s) al incendio (85 en total) y actualiza la zona,lo vio desde arriba en su revisión
+900,3.29,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [20, 25])",lo vio hace poco — ya se quemó y no arde
+901,3.29,coordinador,aviso,T3,"T3 reporta incendio en [[23, 26]]",
+901,3.29,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [23, 26])",lo vio hace poco — ya se quemó y no arde
+913,3.34,coordinador,aviso,T3,"T3 reporta incendio en [[23, 31]]",
+913,3.34,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+915,3.34,coordinador,aviso,,Suma 6 celda(s) al incendio (76 en total) y actualiza la zona,lo vio desde arriba en su revisión
+915,3.34,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [23, 31])",lo vio hace poco — ya se quemó y no arde
+930,3.4,coordinador,aviso,,Suma 9 celda(s) al incendio (76 en total) y actualiza la zona,lo vio desde arriba en su revisión
+944,3.45,coordinador,aviso,T3,"T3 reporta incendio en [[24, 32]]",
+944,3.45,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+945,3.45,coordinador,aviso,,Suma 69 celda(s) al incendio (90 en total) y actualiza la zona,lo vio desde arriba en su revisión
+945,3.45,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [24, 32])",lo vio hace poco — ya se quemó y no arde
+975,3.56,coordinador,aviso,,Suma 22 celda(s) al incendio (106 en total) y actualiza la zona,lo vio desde arriba en su revisión
+990,3.62,coordinador,aviso,,Suma 45 celda(s) al incendio (91 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1020,3.73,coordinador,aviso,,Suma 32 celda(s) al incendio (100 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1031,3.77,coordinador,aviso,T3,"T3 reporta incendio en [[23, 14]]",
+1031,3.77,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1035,3.78,coordinador,aviso,,Suma 49 celda(s) al incendio (90 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1035,3.78,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [23, 14])",lo vio hace poco — ya se quemó y no arde
+1041,3.8,coordinador,aviso,T1,"T1 reporta incendio en [[35, 41]]",
+1041,3.8,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1045,3.82,coordinador,aviso,T1,"T1 reporta incendio en [[34, 42]]",
+1045,3.82,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1050,3.84,coordinador,aviso,,Suma 29 celda(s) al incendio (98 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1050,3.84,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [35, 41])",lo vio hace poco y sí hay algo
+1050,3.84,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [34, 42])",lo vio hace poco y sí hay algo
+1051,3.84,coordinador,aviso,T3,"T3 reporta incendio en [[25, 13]]",
+1051,3.84,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1065,3.89,coordinador,aviso,,Suma 5 celda(s) al incendio (82 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1065,3.89,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [25, 13])",lo vio hace poco — ya se quemó y no arde
+1068,3.9,coordinador,aviso,T1,"T1 reporta incendio en [[34, 43]]",
+1068,3.9,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1080,3.95,coordinador,aviso,,Suma 32 celda(s) al incendio (84 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1080,3.95,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [34, 43])",lo vio hace poco y sí hay algo
+1081,3.95,coordinador,aviso,T1,"T1 reporta incendio en [[35, 43]]",
+1081,3.95,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [35, 43])",lo vio hace poco y sí hay algo
+1098,4.01,coordinador,aviso,T1,"T1 reporta incendio en [[35, 44]]",
+1098,4.01,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1110,4.06,coordinador,aviso,,Suma 46 celda(s) al incendio (71 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1110,4.06,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [35, 44])",lo vio hace poco y sí hay algo
+1125,4.11,coordinador,aviso,T1,"T1 reporta incendio en [[35, 45]]",
+1125,4.11,coordinador,aviso,,Suma 11 celda(s) al incendio (69 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1125,4.11,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [35, 45])",lo vio hace poco y sí hay algo
+1147,4.19,coordinador,aviso,T3,"T3 reporta incendio en [[34, 3]]",
+1147,4.19,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1149,4.2,coordinador,aviso,T3,"T3 reporta incendio en [[34, 2]]",
+1149,4.2,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1151,4.21,coordinador,aviso,T3,"T3 reporta incendio en [[33, 2]]",
+1151,4.21,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1154,4.22,coordinador,aviso,T1,"T1 reporta incendio en [[34, 45]]",
+1154,4.22,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1155,4.22,coordinador,aviso,,Suma 32 celda(s) al incendio (56 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1155,4.22,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [34, 3])",lo vio hace poco — ya se quemó y no arde
+1155,4.22,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [34, 2])",lo vio hace poco — ya se quemó y no arde
+1155,4.22,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [33, 2])",lo vio hace poco — ya se quemó y no arde
+1155,4.22,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [34, 45])",lo vio hace poco y sí hay algo
+1169,4.27,coordinador,aviso,T1,"T1 reporta incendio en [[33, 45]]",
+1169,4.27,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1170,4.28,coordinador,aviso,,Suma 7 celda(s) al incendio (55 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1170,4.28,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [33, 45])",lo vio hace poco y sí hay algo
+1173,4.29,coordinador,aviso,T1,"T1 reporta incendio en [[32, 45]]",
+1173,4.29,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1181,4.32,coordinador,aviso,T1,"T1 reporta incendio en [[33, 46]]",
+1181,4.32,coordinador,decision,T4,No ha visto esa zona hace poco — manda a T4 a revisar,T4 está libre y a 15 celdas; además la revisará desde arriba
+1182,4.32,coordinador,aviso,T4,T4 no puede ir a revisar; lo revisará desde arriba,
+1185,4.33,coordinador,aviso,,Suma 11 celda(s) al incendio (57 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1185,4.33,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [32, 45])",lo vio hace poco y sí hay algo
+1185,4.33,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [33, 46])",lo vio hace poco y sí hay algo
+1188,4.34,coordinador,aviso,T1,"T1 reporta incendio en [[31, 45]]",
+1188,4.34,coordinador,aviso,T1,"Ya conocía el reporte de T1 (incendio en [31, 45])",ya lo tenía confirmado
+1189,4.35,coordinador,aviso,T1,"T1 reporta incendio en [[30, 45]]",
+1189,4.35,coordinador,aviso,T1,"Ya conocía el reporte de T1 (incendio en [30, 45])",ya lo tenía confirmado
+1200,4.39,coordinador,aviso,,Suma 23 celda(s) al incendio (62 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1202,4.39,coordinador,aviso,T3,"T3 reporta incendio en [[21, 34]]",
+1202,4.39,coordinador,aviso,T3,"Ya conocía el reporte de T3 (incendio en [21, 34])",ya lo tenía confirmado
+1206,4.41,coordinador,aviso,T1,"T1 reporta incendio en [[30, 46]]",
+1206,4.41,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1212,4.43,coordinador,aviso,T3,"T3 reporta incendio en [[18, 34]]",
+1212,4.43,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1215,4.44,coordinador,aviso,,Suma 13 celda(s) al incendio (48 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1215,4.44,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [30, 46])",lo vio hace poco y sí hay algo
+1215,4.44,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [18, 34])",lo vio hace poco — ya se quemó y no arde
+1225,4.48,coordinador,aviso,T1,"T1 reporta incendio en [[29, 46]]",
+1225,4.48,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1230,4.5,coordinador,aviso,T1,"T1 reporta incendio en [[28, 46]]",
+1230,4.5,coordinador,aviso,,Suma 5 celda(s) al incendio (47 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1230,4.5,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [29, 46])",lo vio hace poco y sí hay algo
+1230,4.5,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [28, 46])",lo vio hace poco y sí hay algo
+1232,4.5,coordinador,aviso,T1,"T1 reporta incendio en [[26, 45]]",
+1232,4.5,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1245,4.55,coordinador,aviso,T1,"T1 reporta incendio en [[26, 46]]",
+1245,4.55,coordinador,aviso,,Suma 16 celda(s) al incendio (57 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1245,4.55,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [26, 45])",lo vio hace poco y sí hay algo
+1245,4.55,coordinador,decision,T1,"Confirma el reporte de T1 (incendio en [26, 46])",lo vio hace poco y sí hay algo
+1260,4.61,coordinador,aviso,,Suma 4 celda(s) al incendio (41 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1290,4.71,coordinador,aviso,,Suma 15 celda(s) al incendio (39 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1305,4.77,coordinador,aviso,,Suma 2 celda(s) al incendio (33 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1324,4.84,coordinador,plan,T3,T3 no avanza — le pide que busque otro camino,40 pasos sin avance
+1335,4.88,coordinador,aviso,,Suma 11 celda(s) al incendio (19 en total) y actualiza la zona,lo vio desde arriba en su revisión
+1345,4.92,coordinador,aviso,T3,"T3 reporta incendio en [[19, 42]]",
+1345,4.92,coordinador,decision,,No ha visto esa zona hace poco — la revisará desde arriba,no hay un tractor cerca ni libre para ir a ver
+1350,4.93,coordinador,aviso,T3,"Registra el reporte de T3 (incendio en [19, 42])",lo vio hace poco — ya se quemó y no arde
+1371,5.01,mundo,evento,,Ya no queda fuego en el campo,
+1395,5.1,coordinador,decision,T3,"El fuego quedó apagado, T3 regresa la pipa a la estación",ya no cree que quede fuego (vista desde arriba y reportes)
+1395,5.1,coordinador,decision,,Vuelve a habilitar las celdas de la zona prohibida,ya no hay fuego ni obstáculos confirmados en ella
+1478,5.4,coordinador,aviso,T3,T3 terminó la misión de apagar y quedó libre,

@@ -1,0 +1,20 @@
+t,hora,fuente,tipo,tractor,texto,motivo
+661,2.42,mundo,evento,,"Aparece un obstáculo de 2x2 en [38, 16]",
+675,2.47,coordinador,decision,,Confirma un obstáculo nuevo (4 celdas); marca zona prohibida y avisa para que rodeen,lo vio desde arriba en su revisión
+675,2.47,coordinador,aviso,,Avisa a todos la zona prohibida (4 celdas),
+754,2.76,coordinador,aviso,T2,"T2 reporta obstaculo en [[38, 17]]",
+754,2.76,coordinador,aviso,T2,"Ya conocía el reporte de T2 (obstaculo en [38, 17])",ya lo tenía confirmado
+755,2.76,coordinador,aviso,T2,"T2 reporta obstaculo en [[38, 16]]",
+755,2.76,coordinador,aviso,T2,"Ya conocía el reporte de T2 (obstaculo en [38, 16])",ya lo tenía confirmado
+786,2.87,coordinador,aviso,T2,"T2 reporta obstaculo en [[39, 16]]",
+786,2.87,coordinador,aviso,T2,"Ya conocía el reporte de T2 (obstaculo en [39, 16])",ya lo tenía confirmado
+787,2.88,coordinador,aviso,T2,"T2 reporta obstaculo en [[39, 17]]",
+787,2.88,coordinador,aviso,T2,"Ya conocía el reporte de T2 (obstaculo en [39, 17])",ya lo tenía confirmado
+1013,3.7,coordinador,aviso,T4,"T4 reporta obstaculo en [[38, 17]]",
+1013,3.7,coordinador,aviso,T4,"Ya conocía el reporte de T4 (obstaculo en [38, 17])",ya lo tenía confirmado
+1137,4.16,coordinador,aviso,T4,"T4 reporta obstaculo en [[38, 16]]",
+1137,4.16,coordinador,aviso,T4,"Ya conocía el reporte de T4 (obstaculo en [38, 16])",ya lo tenía confirmado
+1138,4.16,coordinador,aviso,T4,"T4 reporta obstaculo en [[39, 16]]",
+1138,4.16,coordinador,aviso,T4,"Ya conocía el reporte de T4 (obstaculo en [39, 16])",ya lo tenía confirmado
+1139,4.16,coordinador,aviso,T4,"T4 reporta obstaculo en [[39, 17]]",
+1139,4.16,coordinador,aviso,T4,"Ya conocía el reporte de T4 (obstaculo en [39, 17])",ya lo tenía confirmado

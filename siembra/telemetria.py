@@ -1,11 +1,12 @@
 """Guardar y cargar corridas detalladas, y exportar el JSON precalculado para Unity.
 
-Una corrida detallada vive en `resultados/corridas/<id>/` con estos archivos:
-
+Una corrida detallada vive en `resultados/corridas/<id>/` con estos archivos
 - `meta.json`: `version_esquema`, `parametros`, `resumen`, `campo`, `derivados`.
 - `pasos.csv`, `mensajes.csv`, `serie.csv`: las tablas del contrato.
 - `celdas.npz`: los arreglos de `celdas` (forma `(ancho, alto)`, índice `[x, y]`).
 - `unity.json`: telemetría por paso para Unity (ver `exportar_unity`).
+- Solo con eventos o en M3 — `eventos.json` (fuego, zonas prohibidas, obstáculos nuevos) y
+  `registro.csv` (avisos y decisiones del coordinador). Unity no los usa.
 
 `cargar_corrida(carpeta)` devuelve el mismo dict que `simular(cfg, detalle=True)`.
 """
@@ -23,6 +24,8 @@ import pandas as pd
 from . import VERSION_ESQUEMA
 
 ARCHIVOS = ("meta.json", "pasos.csv", "mensajes.csv", "serie.csv", "celdas.npz", "unity.json")
+ARCHIVOS_M3 = ("eventos.json", "registro.csv")   # opcionales (M3 o eventos activos)
+COLUMNAS_REGISTRO = ("t", "fuente", "tipo", "evento", "tractor", "texto", "motivo")
 
 COLUMNAS_SERIE = ("t", "surcado_frac", "sembrado_frac", "fila_estacion", "en_servicio",
                   "reservas_activas", "mensajes_acum", "perdidos_acum")
@@ -119,8 +122,15 @@ def guardar_corrida(res, carpeta, unity=True, cada_unity=1):
     if unity and res.get("pasos") is not None:
         exportar_unity(res, carpeta / "unity.json", cada=cada_unity)
         escritos.add("unity.json")
+    if res.get("eventos") is not None:
+        with open(carpeta / "eventos.json", "w", encoding="utf-8") as f:
+            json.dump(a_json(res["eventos"]), f, ensure_ascii=False, allow_nan=False)
+        escritos.add("eventos.json")
+    if res.get("registro") is not None:
+        pd.DataFrame(res["registro"], columns=list(COLUMNAS_REGISTRO)).to_csv(carpeta / "registro.csv", index=False)
+        escritos.add("registro.csv")
     # Archivos de una corrida anterior en la misma carpeta que esta corrida no reemplazó.
-    for archivo in ARCHIVOS:
+    for archivo in ARCHIVOS + ARCHIVOS_M3:
         if archivo not in escritos and (carpeta / archivo).exists():
             (carpeta / archivo).unlink()
     return carpeta
@@ -164,6 +174,19 @@ def cargar_corrida(carpeta):
                                      ("mensajes", "mensajes.csv", COLUMNAS_MENSAJES)):
         if (carpeta / archivo).exists():
             res[llave] = _leer_csv(carpeta / archivo, columnas)
+    if (carpeta / "eventos.json").exists():
+        with open(carpeta / "eventos.json", encoding="utf-8") as f:
+            ev = json.load(f)
+        for k in ("t_quemado", "t_fin_fuego"):
+            if ev.get(k) is not None:
+                ev[k] = np.asarray(ev[k], dtype=np.int32)
+        res["eventos"] = ev
+    if (carpeta / "registro.csv").exists():
+        reg = _leer_csv(carpeta / "registro.csv", COLUMNAS_REGISTRO)
+        for c in ("fuente", "tipo", "evento", "tractor", "texto", "motivo"):
+            if c in reg.columns:
+                reg[c] = reg[c].fillna("").astype(str)
+        res["registro"] = reg
     return res
 
 

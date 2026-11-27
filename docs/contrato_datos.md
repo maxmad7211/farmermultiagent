@@ -103,6 +103,18 @@ Falla: `t_falla` (paso en que se descompuso un tractor; -1 si no hubo falla), `t
 
 Costos (los agrega `metricas.costos`): `R_ha_dia`, `costo_R`, `costo_H`, `costo_colisiones`, `costo_diesel`, `costo_no_sembrada`, `J`, `costo_propiedad`, `costo_ha`, `pct_en_ventana`, `T_dias_calendario`.
 
+### M3 y eventos (opcional)
+
+Solo cuando `mecanismo` es `"M3"` o hay algún evento activo (`eventos.incendio.activo`, `eventos.obstaculo_nuevo.activo` o `coordinador.tasa_reporte_falso` > 0). Sin eso `simular` devuelve exactamente lo de arriba. El detalle está en [`m3.md`](m3.md).
+
+- `eventos` (dict) con `t_quemado`, `t_fin_fuego` (arreglos `(ancho, alto)`, -1 si no aplica), `apagadas`, `origen_incendio`, `t_incendio`, `t_fuego_extinto`, `obstaculos_nuevos` (`[x, y, ancho, alto, t]`) y `zonas` (`[{"t", "celdas", "fuego"}]`, cada cambio de la zona prohibida).
+- `registro` (DataFrame) con `t`, `fuente` (`mundo` o `coordinador`), `tipo` (`evento`, `aviso`, `decision`, `plan`, `subasta`), `evento`, `tractor`, `texto` y `motivo`.
+- En `pasos`, `implemento` vale `pipa` o `grua` mientras el tractor lleva esa herramienta, `estado` puede valer `emergencia` (grupo Traslado) e `intencion` puede valer `apagar`, `remolcar`, `enganchar`, `revisar`, `alejarse`, `enganchar pipa`, `enganchar grua`, `llenar pipa` o `regresar herramienta`. Solo pasa en M3.
+- En `mensajes`, el coordinador es `"SUP"`; además de las performativas de arriba usa `request` y `query-if`. Los eventos nuevos de `inform` son `latido`, `reporte`, `zona`, `descartado`, `objetivo`, `mision_inicio`, `mision_fin`, `apague`, `sin_fuego`, `verificacion`, `entregado`, `reparado`, `rechazo`.
+- El resumen agrega `t_incendio`, `t_obstaculo_nuevo`, `t_fuego_extinto`, `t_deteccion_*`, `t_respuesta_*`, `dt_*`, `t_remolque_entregado`, `t_reparado`, `celdas_quemadas`, `area_quemada_ha`, `celdas_apagadas`, `area_perdida_ha`, `celdas_reasignadas`, `reasignadas_ya_hechas`, `area_doble_ha`, `entradas_fuego`, `entradas_peligro`, `entradas_prohibidas`, `entradas_sin_aviso`, `toques_obstaculo`, `frenadas_fuego`, `emergencia_h`, `reportes_total`, `reportes_reales`, `reportes_falsos`, `falsos_descartados`, `falsos_confirmados`, `reales_descartados`, `reportes_verificados`, `reportes_sin_decidir`, `subastas_urgentes`, `replanes` y `decisiones_coordinador`. Con `falla.activa` también se agregan en M0, M1 y M2 (sin cambiar ningún valor existente).
+- `corridas/<id>/` puede traer además `eventos.json` y `registro.csv`; `cargar_corrida` los devuelve como `eventos` y `registro`. `unity.json` no cambia.
+- `resultados/m3.csv` (una fila por corrida del experimento `m3`, con `dt_deteccion` y `dt_respuesta` del evento de cada escenario) y `resultados/m3_resumen.csv` (media e IC 95 % por escenario y mecanismo).
+
 ## Función de costo (`metricas.costos(resumen, cfg) -> dict`)
 
 Se calcula solo con el resumen y los parámetros, para poder repetirla con otros precios sin volver a simular.
