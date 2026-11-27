@@ -16,6 +16,8 @@ Proyecto del curso TC2008B Sistemas Multiagentes (Tecnológico de Monterrey), co
 
 Además se corren 9 escenarios (normales, adversos y límite) y una sensibilidad de los parámetros de la arquitectura. El detalle está en [`docs/modelo.md`](docs/modelo.md).
 
+**M3 · coordinador supervisor.** Un cuarto mecanismo que se escoge igual que los otros (`mecanismo` = `"M3"`). Es M2 más un agente que vigila el campo desde arriba, recibe los reportes de los tractores y maneja incendios, obstáculos nuevos, tractores descompuestos (con grúa y reparación) y reportes falsos, con subastas urgentes y un registro de cada decisión con su motivo. M0, M1 y M2 no cambian y no corre en el barrido ni en los escenarios de la propuesta; se compara contra M2 con `python -m siembra.experimentos --solo m3` y se ve en 2D con `python herramientas/vista_m3.py`. Todo está en [`docs/m3.md`](docs/m3.md).
+
 El barrido solo responde en 5 tamaños de campo. El **modelo sustituto** ([`docs/sustituto.md`](docs/sustituto.md)) aprende de las corridas, elige dónde simular más (aprendizaje activo) y da el N óptimo en cualquier tamaño de 10 a 160 ha, con su incertidumbre.
 
 ## Requisitos
@@ -216,6 +218,8 @@ print(telemetria.validar_unity(carpeta / "unity.json"))   # (True, []) si el JSO
 | `siembra/planificador.py` | A* con costos por tipo de celda y Cooperative A* con ventana (WHCA*) |
 | `siembra/comunicacion.py` | Mensajes FIPA-ACL con pérdida y retraso |
 | `siembra/agentes.py` | Tractor (agente híbrido) y gestor de subastas del depósito |
+| `siembra/coordinador.py` | M3, coordinador supervisor y la parte del tractor que percibe, reporta, se protege y hace misiones |
+| `siembra/eventos.py` | M3, incendio que se propaga y obstáculo que aparece (la verdad del mundo) |
 | `siembra/modelo.py` | Modelo AgentPy, capa reactiva, falla, resumen y `simular` |
 | `siembra/metricas.py` | Función de costo J, costo por hectárea, IC, pruebas pareadas, óptimo por campo, sensibilidad económica |
 | `siembra/telemetria.py` | Guardar y cargar corridas, exportar y validar el JSON para Unity |
@@ -224,6 +228,7 @@ print(telemetria.validar_unity(carpeta / "unity.json"))   # (True, []) si el JSO
 | `siembra/sustituto.py` | Modelo sustituto (Random Forest por defecto o proceso gaussiano), aprendizaje activo, su evaluación y el modelo guardado (CLI) |
 | `siembra/interfaz.py`, `siembra/interfaz.html` | Página local para probar el modelo guardado con valores propios (`python -m siembra.interfaz`) |
 | `herramientas/construir_dashboard.py` | Genera y ejecuta `notebooks/dashboard.ipynb` |
+| `herramientas/vista_m3.py` | Vista 2D de una corrida de M3 (GIF, mapa y registro de decisiones) |
 | `herramientas/comparar_modelos.py` | Compara el modelo sustituto con los métodos de regresión del curso (escribe `resultados/sustituto/comparacion_modelos.csv`) |
 | `notebooks/dashboard.ipynb` | Dashboard (generado; no se edita a mano) |
 | `correr_todo.py` | Experimentos, modelo sustituto, dashboard y pruebas en un solo comando |
@@ -284,6 +289,7 @@ Los costos de cada corrida se pueden recalcular con otros precios sin volver a s
 |---|---|
 | [`docs/modelo.md`](docs/modelo.md) | El modelo como quedó implementado, regla por regla, y cada desviación respecto a la propuesta |
 | [`docs/contrato_datos.md`](docs/contrato_datos.md) | Qué produce cada módulo: API de `simular`, columnas de cada tabla, función de costo, archivos y colores |
+| [`docs/m3.md`](docs/m3.md) | M3, coordinador supervisor, casos que maneja, reglas, comparación con M2 y vista 2D |
 | [`docs/sustituto.md`](docs/sustituto.md) | Componente de machine learning: modelo sustituto, aprendizaje activo, evaluación y resultados |
 | [`docs/analisis_critico.md`](docs/analisis_critico.md) | Qué se puede concluir, sensibilidad, fallos, limitaciones, simulación contra realidad y mejoras |
 | [`docs/rubrica.md`](docs/rubrica.md) | Dónde se cubre cada criterio de la rúbrica |

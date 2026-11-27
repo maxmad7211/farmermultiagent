@@ -11,9 +11,11 @@ import pandas as pd
 from .agentes import (CAMBIANDO, EN_FILA, EN_RUTA, ESPERANDO_CELDA, ESPERANDO_SURCO, ESTADOS_ESPERA,
                       FUERA, Gestor, M_FUERA, M_SERVICIO, M_TERMINADO, NEGOCIANDO, RECARGANDO, RUTA_DEPOSITO,
                       SEMBRADORA, SIN_TAREA, SURCADOR, TERMINADO, TRABAJANDO, Tractor)
-from .campo import SEMBRADA, Campo
+from .campo import LIBRE, SEMBRADA, Campo, manhattan
 from .comunicacion import Bus
-from .config import derivados, validar
+from .config import derivados, derivados_m3, parametros_m3, validar
+from .coordinador import EMERGENCIA, Coordinador, _bola
+from .eventos import Eventos
 from .planificador import TablaReservas
 
 COLUMNAS_PASOS = ["t", "agente", "x", "y", "theta", "estado", "implemento", "intencion",
@@ -22,6 +24,10 @@ COLUMNAS_SERIE = ["t", "surcado_frac", "sembrado_frac", "fila_estacion", "en_ser
                   "reservas_activas", "mensajes_acum", "perdidos_acum"]
 COLUMNAS_MENSAJES = ["t_envio", "t_entrega", "performativa", "emisor", "receptor", "evento",
                      "tipo_tarea", "x", "ronda", "u", "perdido"]
+COLUMNAS_REGISTRO = ["t", "fuente", "tipo", "evento", "tractor", "texto", "motivo"]
+# Momentos de M3 que se miden (paso; -1 si no ocurrió)
+MARCAS = ("t_deteccion_incendio", "t_respuesta_incendio", "t_deteccion_obstaculo", "t_respuesta_obstaculo",
+          "t_deteccion_falla", "t_respuesta_falla", "t_remolque_entregado", "t_reparado")
 
 
 def _bloques(valores, k):
@@ -35,6 +41,10 @@ class ModeloSiembra(ap.Model):
         self.detalle = bool(self.p["detalle"])
         self.d = derivados(self.cfg)
         self.mec = self.cfg["mecanismo"]
+        self.cooperativo = self.mec in ("M2", "M3")   # Cooperative A*, fila en blackboard, broadcast
+        m3 = parametros_m3(self.cfg)
+        self.p3 = m3["coordinador"]
+        self.d3 = derivados_m3(self.cfg)
         self.c = self.cfg["comunicacion"]
         a = self.cfg["agente"]
         self.campo = Campo(self.cfg, self.random)
@@ -54,6 +64,22 @@ class ModeloSiembra(ap.Model):
         self.falla_hecha = False
         self.t_falla = -1
         self.tractor_fallado = ""
+        self.fallado_activo = False    # entre la falla y la reparación (M3)
+        # M3 — estado del mundo y métricas (sin efecto mientras no haya eventos ni coordinador)
+        self.remolques = {}            # tractor que remolca -> tractor remolcado
+        self.marcas = {}
+        self.registro_mundo = []
+        self.verdad_reportes = {}
+        self.n_reportes = 0
+        self.reasig_celdas = 0
+        self.reasig_hechas = 0
+        self.entradas_fuego = 0
+        self.entradas_peligro = 0
+        self.entradas_prohibidas = 0
+        self.entradas_sin_aviso = 0
+        self.toques_obstaculo = 0
+        self.frenadas_fuego = 0
+        self._cache_zona = (None, frozenset())
         self.colisiones = 0
         self.intercambios = 0
         self.vetos = 0
@@ -100,11 +126,58 @@ class ModeloSiembra(ap.Model):
             for i in range(n)
         ])
         self.tractores = self.orden
-        self.gestor = Gestor(self) if self.mec in ("M1", "M2") else None
+        self.gestor = Gestor(self) if self.mec in ("M1", "M2", "M3") else None
+        self.eventos = Eventos(self, m3["eventos"], reportes_falsos=self.p3["tasa_reporte_falso"] > 0)
+        self.coordinador = Coordinador(self, self.p3) if self.mec == "M3" else None
+        self.m3_activo = self.eventos.activo or self.coordinador is not None
         self.filas_pasos = []
         self.filas_serie = []
         self.prev_pos = [tr.pos for tr in self.orden]
         self._registrar(0)
+
+    def tractor(self, nombre):
+        for tr in self.orden:
+            if tr.nombre == nombre:
+                return tr
+        return None
+
+    def marcar(self, clave, t):
+        """Anota la primera vez que ocurre un momento medible de M3 (ver MARCAS)."""
+        self.marcas.setdefault(clave, int(t))
+
+    def anotar_verdad(self, t, evento, texto):
+        self.registro_mundo.append({"t": int(t), "fuente": "mundo", "tipo": "evento", "evento": evento,
+                                    "tractor": "", "texto": texto, "motivo": ""})
+
+    def contar_reasignacion(self, clave, inicio, d):
+        """Métrica — celdas que se vuelven a repartir tras la falla y cuántas ya estaban hechas."""
+        tipo, x = clave
+        col = self.campo.columnas[x]
+        if inicio is not None:
+            inicio = tuple(inicio)
+            d = d or 1
+            col = [c for c in col if (c[1] >= inicio[1] if d == 1 else c[1] <= inicio[1])]
+        hechas = 0
+        for c in col:
+            e = self.campo.estado(c)
+            if (e != LIBRE and e != SEMBRADA and tipo == "surcar") or e == SEMBRADA:
+                hechas += 1
+        self.reasig_celdas += len(col)
+        self.reasig_hechas += hechas
+
+    def lugar_taller(self, quien):
+        """Celda libre del patio, lejos de la entrada de la estación, donde se deja a un tractor remolcado."""
+        dx = self.campo.deposito[0]
+        ocupadas = {tr.pos for tr in self.orden}
+        # Cerca de la estación y lejos de los estacionamientos (que están en las orillas del patio),
+        # para no encerrar a nadie en una esquina mientras dura la reparación
+        estacionamientos = {tr.estacionamiento for tr in self.orden}
+        libres = [(x, 0) for x in range(self.campo.ancho)
+                  if abs(x - dx) >= 3 and (x, 0) not in ocupadas and (x, 0) not in self.bloqueadas
+                  and (x, 0) not in estacionamientos and 0 < x < self.campo.ancho - 1]
+        if not libres:
+            libres = [(x, 0) for x in range(self.campo.ancho) if abs(x - dx) >= 2] or [quien.pos]
+        return min(libres, key=lambda c: (abs(c[0] - dx), manhattan(quien.pos, c), c))
 
     def ocupante(self, c):
         for tr in self.orden:
@@ -115,7 +188,7 @@ class ModeloSiembra(ap.Model):
     # ------------------------------------------------------------------ paso
     def step(self):
         t = self.t
-        if self.mec == "M2":
+        if self.cooperativo:
             # Cooperative A*: tabla limpia cada paso; los tractores replanean en orden de prioridad.
             # Los que no se pueden mover (en servicio o estacionados) se reservan primero.
             self.reservas.reiniciar(t, {tr.nombre: tr.pos for tr in self.orden})
@@ -131,6 +204,9 @@ class ModeloSiembra(ap.Model):
                     self.reservas.reservar(tr.nombre, tr.pos, t + k)
         if self.gestor is not None:
             self.gestor.paso(t)
+        self.eventos.paso(t)
+        if self.coordinador is not None:
+            self.coordinador.paso(t)
         self._falla(t)
         for tr in self.orden:
             tr.decidir(t)
@@ -145,27 +221,82 @@ class ModeloSiembra(ap.Model):
     def _resolver(self):
         """Capa reactiva: nadie entra a una celda ocupada al inicio del paso ni a una ya reclamada."""
         ocupadas = {tr.pos for tr in self.orden}
+        antes = {tr.nombre: tr.pos for tr in self.orden}
+        obst = self.eventos.celdas_obstaculo
+        fuego = self.eventos.fuego
         reclamadas = set()
         for tr in self.orden:  # orden de prioridad fijo: surcadores primero
             c = tr.deseo
             if c is None or c == tr.pos:
                 continue
             if (c in ocupadas or c in reclamadas or c in self.bloqueadas
-                    or c not in self.campo.vecinos[tr.pos] or tr.diesel <= 0):
+                    or c not in self.campo.vecinos[tr.pos] or tr.diesel <= 0 or c in obst or c in fuego):
                 tr.vetado = True
                 self.vetos += 1
+                if c in obst:
+                    # Topó con un obstáculo que no conocía — ahora sí lo sabe
+                    self.toques_obstaculo += 1
+                    tr.obst_visto.add(c)
+                elif c in fuego:
+                    # Capa reactiva — frena antes de entrar a una celda que arde (la tiene enfrente)
+                    self.frenadas_fuego += 1
+                    tr.ver_fuego(c, self.t)
                 continue
             reclamadas.add(c)
             tr.mover(c)
+        # M3 — el tractor remolcado ocupa la celda que deja quien lo remolca
+        for n_grua, n_rem in self.remolques.items():
+            grua, rem = self.tractor(n_grua), self.tractor(n_rem)
+            if grua.movio:
+                self.bloqueadas.discard(rem.pos)
+                if self.campo.es_trabajo(rem.pos) and self.campo.estado(rem.pos) != SEMBRADA:
+                    self.gestor.reabrir_celda(rem.pos)
+                delta = (antes[n_grua][0] - rem.pos[0], antes[n_grua][1] - rem.pos[1])
+                rem.theta = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}.get(delta, rem.theta)
+                rem.pos = antes[n_grua]
+                self.bloqueadas.add(rem.pos)
 
     def _verificar_seguridad(self):
         pos = [tr.pos for tr in self.orden]
+        if self.m3_activo:
+            self._medir_entradas(pos)
         self.colisiones += len(pos) - len(set(pos))
         for i in range(len(pos)):
             for j in range(i + 1, len(pos)):
                 if pos[i] == self.prev_pos[j] and pos[j] == self.prev_pos[i] and pos[i] != pos[j]:
                     self.intercambios += 1
         self.prev_pos = pos
+
+    def _zona_vigente(self):
+        """Celdas que ya rigen como zona prohibida — las que llevan prohibidas sin interrupción al menos
+        retraso_max + 1 pasos (el tiempo para que el aviso llegue). Si el aviso se pierde, sí cuentan
+        (el coordinador lo reenvía con los latidos)."""
+        if self.coordinador is None:
+            return frozenset()
+        co = self.coordinador
+        if self._cache_zona[0] != self.t:
+            limite = self.t - self.c["retraso_max"] - 1
+            self._cache_zona = (self.t, frozenset(c for c, t0 in co.zona_desde.items() if t0 <= limite))
+        return self._cache_zona[1]
+
+    def _medir_entradas(self, pos):
+        """M3 — entradas al fuego, junto al fuego (verdad) y a la zona que declaró el coordinador."""
+        fuego = self.eventos.fuego
+        peligro = _bola(fuego, 1, self.campo) if fuego else set()
+        zona = self._zona_vigente()
+        actual = self.coordinador.zona if self.coordinador is not None else frozenset()
+        for tr, c, prev in zip(self.orden, pos, self.prev_pos):
+            if c == prev or tr.remolcado_por:
+                continue
+            if c in fuego:
+                self.entradas_fuego += 1
+            if c in peligro and prev not in peligro:
+                self.entradas_peligro += 1
+            if c in zona and prev not in actual and prev not in tr.zona:   # salir de la zona no es entrar
+                if c in tr.zona:
+                    self.entradas_prohibidas += 1    # la conocía y aun así entró (no debe pasar)
+                else:
+                    self.entradas_sin_aviso += 1     # el aviso de la zona no le llegó (mensajes perdidos)
 
     def _falla(self, t):
         f = self.cfg["falla"]
@@ -178,17 +309,36 @@ class ModeloSiembra(ap.Model):
             return
         tr = self.random.choice(candidatos)
         tr.fallar(t)
+        self.fallado_activo = True
+        self.anotar_verdad(t, "falla", f"{tr.nombre} se descompone en {list(tr.pos)}")
         self.bloqueadas_nombres.add(tr.nombre)
         self.falla_hecha = True
         self.t_falla = t
         self.tractor_fallado = tr.nombre
 
+    def inaccesibles(self):
+        """Celdas de trabajo sin sembrar que ya no se pueden trabajar (bajo un tractor descompuesto,
+        quemadas o bajo un obstáculo nuevo)."""
+        campo = self.campo
+        perdidas = self.eventos.perdidas()
+        n = sum(1 for c in self.bloqueadas
+                if campo.es_trabajo(c) and campo.estado(c) != SEMBRADA and c not in perdidas)
+        return n + len(perdidas)
+
+    def _coordinador_pendiente(self):
+        """M3: el coordinador todavía tiene a quién remolcar y con quién hacerlo (no se termina aún)."""
+        co = self.coordinador
+        if co is None or not (co.fallados or co.misiones or co.pendientes or self.fallado_activo):
+            return False
+        return any(tr.modo != M_FUERA for tr in self.orden)
+
     def _terminar(self, t):
         campo = self.campo
-        inaccesibles = sum(1 for c in self.bloqueadas if campo.es_trabajo(c) and campo.estado(c) != SEMBRADA)
+        inaccesibles = self.inaccesibles()
         if campo.n_sembradas + inaccesibles >= campo.n_trabajo:
             return True
-        if all(tr.modo in (M_FUERA, M_TERMINADO) for tr in self.orden):
+        if all(tr.modo in (M_FUERA, M_TERMINADO) for tr in self.orden) and \
+                not any(tr.reparando for tr in self.orden) and not self._coordinador_pendiente():
             return True
         if t - self.ultimo_progreso > self.max_estancado:
             self.estancado = True
@@ -203,7 +353,8 @@ class ModeloSiembra(ap.Model):
             for tr in self.orden:
                 obj = tr.objetivo or (-1, -1)
                 self.filas_pasos.append((
-                    t, tr.nombre, tr.pos[0], tr.pos[1], tr.theta, tr.estado, tr.implemento, tr.intencion,
+                    t, tr.nombre, tr.pos[0], tr.pos[1], tr.theta, tr.estado, tr.herramienta or tr.implemento,
+                tr.intencion,
                     obj[0], obj[1], tr.tarea[1] if tr.tarea else -1,
                     tr.tolva / tolva if tr.implemento == SEMBRADORA else float("nan"),
                     max(0.0, tr.diesel) / tanque,
@@ -213,7 +364,7 @@ class ModeloSiembra(ap.Model):
                 t, campo.n_surcadas / campo.n_trabajo, campo.n_sembradas / campo.n_trabajo,
                 sum(1 for tr in self.orden if tr.estado == EN_FILA),
                 1 if self.en_servicio else 0,
-                len(self.reservas.celdas) if self.mec == "M2" else 0,
+                len(self.reservas.celdas) if self.cooperativo else 0,
                 len(self.bus.log), self.bus.n_perdidos,
             ))
 
@@ -227,7 +378,10 @@ class ModeloSiembra(ap.Model):
 # ---------------------------------------------------------------------- resumen
 def resumir(m):
     campo, d, cfg = m.campo, m.d, m.cfg
-    sembradas = campo.t_sembrado[campo.t_sembrado >= 0]
+    vigentes = campo.t_sembrado >= 0
+    if m.eventos.activo:   # lo quemado o tapado por el obstáculo nuevo ya no cuenta como sembrado
+        vigentes &= np.array([[e == SEMBRADA for e in fila] for fila in campo.est])
+    sembradas = campo.t_sembrado[vigentes]
     T = int(sembradas.max()) if sembradas.size else int(m.t)
     T = max(T, 1)
     paso_h = d["paso_h"]
@@ -255,7 +409,7 @@ def resumir(m):
 
     perf = Counter(msg.performativa for msg in m.bus.log)
     q = np.percentile(sembradas, np.arange(0, 101, 5)) if sembradas.size else np.zeros(21)
-    inaccesibles = sum(1 for c in m.bloqueadas if campo.es_trabajo(c) and campo.estado(c) != SEMBRADA)
+    inaccesibles = m.inaccesibles()
 
     r = {
         "mecanismo": m.mec,
@@ -328,6 +482,8 @@ def resumir(m):
     }
     for i, v in zip(range(0, 101, 5), q):
         r[f"q{i:02d}" if i < 100 else "q100"] = float(v)
+    if m.m3_activo or cfg["falla"]["activa"]:
+        r.update(resumir_m3(m, g(EMERGENCIA)))
     try:
         from .metricas import costos
     except ImportError:  # el módulo de métricas se integra aparte
@@ -337,13 +493,61 @@ def resumir(m):
     return r
 
 
+def resumir_m3(m, emergencia_h):
+    """Métricas de la comparación M2 contra M3 (docs/m3.md). Solo con eventos activos o en M3."""
+    ev, celda_ha = m.eventos, m.d["celda_ha"]
+    marcas = {k: m.marcas.get(k, -1) for k in MARCAS}
+
+    def dt(t_fin, t_ini):
+        return t_fin - t_ini if t_fin >= 0 and t_ini >= 0 else -1
+
+    r = {
+        "t_incendio": ev.t_incendio,
+        "t_obstaculo_nuevo": ev.t_obstaculo,
+        "t_fuego_extinto": ev.t_fuego_extinto,
+        **marcas,
+        "dt_deteccion_incendio": dt(marcas["t_deteccion_incendio"], ev.t_incendio),
+        "dt_respuesta_incendio": dt(marcas["t_respuesta_incendio"], ev.t_incendio),
+        "dt_deteccion_obstaculo": dt(marcas["t_deteccion_obstaculo"], ev.t_obstaculo),
+        "dt_deteccion_falla": dt(marcas["t_deteccion_falla"], m.t_falla),
+        "dt_respuesta_falla": dt(marcas["t_respuesta_falla"], m.t_falla),
+        "celdas_quemadas": len(ev.quemadas),
+        "area_quemada_ha": len(ev.quemadas) * celda_ha,
+        "celdas_apagadas": len(ev.apagadas),
+        "area_perdida_ha": len(ev.perdidas()) * celda_ha,
+        "celdas_reasignadas": m.reasig_celdas,
+        "reasignadas_ya_hechas": m.reasig_hechas,
+        "area_doble_ha": m.reasig_hechas * celda_ha,
+        "entradas_fuego": m.entradas_fuego,
+        "entradas_peligro": m.entradas_peligro,
+        "entradas_prohibidas": m.entradas_prohibidas,
+        "entradas_sin_aviso": m.entradas_sin_aviso,
+        "toques_obstaculo": m.toques_obstaculo,
+        "frenadas_fuego": m.frenadas_fuego,
+        "emergencia_h": emergencia_h,
+    }
+    vacio = {"reportes_total": 0, "reportes_reales": 0, "reportes_falsos": 0, "falsos_descartados": 0,
+             "falsos_confirmados": 0, "reales_descartados": 0, "reportes_verificados": 0,
+             "reportes_sin_decidir": 0, "subastas_urgentes": 0, "replanes": 0, "decisiones_coordinador": 0}
+    r.update(m.coordinador.resumen() if m.coordinador is not None else vacio)
+    return r
+
+
+def _df_registro(m):
+    filas = list(m.registro_mundo)
+    if m.coordinador is not None:
+        filas += m.coordinador.registro
+    filas.sort(key=lambda f: (f["t"], 0 if f["fuente"] == "mundo" else 1))
+    return pd.DataFrame(filas, columns=COLUMNAS_REGISTRO)
+
+
 def _df_mensajes(log):
     filas = []
     for msg in log:
         c = msg.contenido
         x, u = c.get("x", -1), float("nan")
         if msg.performativa == "accept-proposal":
-            x = c["tarea"]["x"]
+            x = c["tarea"]["x"] if "tarea" in c else -1   # M3 — la adjudicación urgente no lleva hilera
         elif msg.performativa == "propose" and c.get("ofertas"):
             x, u = c["ofertas"][0]["x"], c["ofertas"][0]["u"]
         filas.append((msg.t_envio, msg.t_entrega, msg.performativa, msg.emisor, msg.receptor,
@@ -381,4 +585,10 @@ def simular(cfg, detalle=False):
     if detalle:
         res["pasos"] = pd.DataFrame(modelo.filas_pasos, columns=COLUMNAS_PASOS)
         res["mensajes"] = _df_mensajes(modelo.bus.log)
+    if modelo.m3_activo:
+        # M3 / eventos — datos extra para la vista 2D (no cambian las llaves del contrato)
+        eventos = modelo.eventos.exportar()
+        eventos["zonas"] = modelo.coordinador.historia_zona if modelo.coordinador is not None else []
+        res["eventos"] = eventos
+        res["registro"] = _df_registro(modelo)
     return res

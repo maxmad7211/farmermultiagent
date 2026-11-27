@@ -4,9 +4,10 @@
 - escenarios: 9 escenarios × mecanismo × semillas -> `escenarios.csv` y `curvas.csv`
 - sens: sensibilidad de la arquitectura (20 ha, 4 tractores) -> `sens_arquitectura.csv`
 - detalladas: corridas con `detalle=True`, semilla 0 -> `corridas/<escenario>_<mecanismo>_s0/`
+- m3 (aparte, solo con `--solo m3`) — M2 contra M3 en los escenarios del coordinador supervisor
+  (docs/m3.md) -> `m3.csv`, `m3_resumen.csv` y corridas detalladas `corridas/m3_*`
 
-Uso (siempre desde la raíz del proyecto, con el entorno virtual):
-
+Uso (siempre desde la raíz del proyecto, con el entorno virtual)
     python -m siembra.experimentos --modo rapido
     python -m siembra.experimentos --modo completo --solo barrido escenarios --nucleos 6
     python -m siembra.experimentos --solo detalladas --salida resultados_prueba
@@ -38,6 +39,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 SALIDA_POR_DEFECTO = RAIZ / "resultados"
 SIMULADOR = "siembra.modelo:simular"
 EXPERIMENTOS = ("barrido", "escenarios", "sens", "detalladas")
+EXPERIMENTOS_EXTRA = ("m3",)   # no corren por defecto; se piden con --solo m3
 N_TRACTORES = (1, 2, 3, 4)
 MAX_PUNTOS_CURVA = 200
 COLUMNAS_CURVAS = ("grupo", "escenario", "mecanismo", "semilla", "t", "t_h", "sembrado_frac", "surcado_frac")
@@ -101,6 +103,50 @@ def escenarios(cfg_base):
         "limite_4t_10ha": ("Límite: 4 tractores en 10 ha",
                            {"campo.hectareas": 10, "flota.n_tractores": 4}),
     }
+
+
+# M3 (docs/m3.md) — mismos mapas y semillas con M2 y con M3, 20 ha y 4 tractores.
+BASE_M3 = {"campo.hectareas": 20, "flota.n_tractores": 4}
+MECANISMOS_M3 = ("M2", "M3")
+DETALLADAS_M3 = ("m3_incendio", "m3_falla", "m3_obstaculo")
+SEMILLAS_M3 = {"rapido": 5, "completo": 20}
+# Columnas de tiempo de cada escenario que se copian a dt_deteccion y dt_respuesta
+TIEMPOS_M3 = {"falla": ("dt_deteccion_falla", "dt_respuesta_falla"),
+              "obstaculo": ("dt_deteccion_obstaculo", "dt_deteccion_obstaculo"),
+              "incendio": ("dt_deteccion_incendio", "dt_respuesta_incendio")}
+METRICAS_M3 = ("dt_deteccion", "dt_respuesta", "area_quemada_ha", "area_perdida_ha", "falsos_descartados",
+               "reportes_falsos", "reales_descartados", "area_doble_ha", "reasignadas_ya_hechas", "colisiones",
+               "entradas_prohibidas", "entradas_sin_aviso", "entradas_fuego", "toques_obstaculo", "cobertura",
+               "T_h", "costo_ha")
+
+
+def escenarios_m3():
+    """Escenarios de la comparación M2 contra M3, como dict id -> (nombre, cambios, tipo de evento)."""
+    return {
+        "m3_falla": ("Un tractor falla a media siembra", {**BASE_M3, "falla.activa": True}, "falla"),
+        "m3_obstaculo": ("Aparece un obstáculo durante la corrida",
+                         {**BASE_M3, "eventos.obstaculo_nuevo.activo": True}, "obstaculo"),
+        "m3_perdida_falla": ("Falla con 20 % de mensajes perdidos",
+                             {**BASE_M3, "falla.activa": True, "comunicacion.perdida_mensajes": 0.2}, "falla"),
+        "m3_incendio": ("Incendio", {**BASE_M3, "eventos.incendio.activo": True}, "incendio"),
+        "m3_falsos": ("Incendio con reportes falsos de los tractores",
+                      {**BASE_M3, "eventos.incendio.activo": True, "coordinador.tasa_reporte_falso": 0.002},
+                      "incendio"),
+    }
+
+
+def unificar_m3(df):
+    """Agrega dt_deteccion y dt_respuesta (pasos) según el evento de cada escenario; -1 pasa a NaN."""
+    df = df.copy()
+    tipos = {k: v[2] for k, v in escenarios_m3().items()}
+    for col, i in (("dt_deteccion", 0), ("dt_respuesta", 1)):
+        valores = []
+        for _, f in df.iterrows():
+            fuente = TIEMPOS_M3[tipos.get(f.get("escenario"), "falla")][i]
+            v = pd.to_numeric(f.get(fuente), errors="coerce")
+            valores.append(np.nan if pd.isna(v) or v < 0 else float(v))
+        df[col] = valores
+    return df
 
 
 @dataclass
@@ -187,8 +233,25 @@ def armar_tareas(experimento, modo="rapido", semillas=None, cfg_base=None, salid
                     grupo="detallada", id=id_, cambios={**cambios, "mecanismo": mec}, semilla=0,
                     detalle=True, etiquetas={"escenario": esc, "escenario_nombre": nombre},
                     carpeta=str(salida / "corridas" / id_), **comun))
+    elif experimento == "m3":
+        n_sem = semillas or SEMILLAS_M3[modo]
+        for esc, (nombre, cambios, _tipo) in escenarios_m3().items():
+            for mec in MECANISMOS_M3:
+                for s in range(n_sem):
+                    tareas.append(Tarea(
+                        grupo="m3", id=f"{esc}_{mec}_s{s}", cambios={**cambios, "mecanismo": mec}, semilla=s,
+                        etiquetas={"escenario": esc, "escenario_nombre": nombre}, **comun))
+        for esc in DETALLADAS_M3:
+            nombre, cambios, _tipo = escenarios_m3()[esc]
+            for mec in MECANISMOS_M3:
+                id_ = f"{esc}_{mec}_s0"
+                tareas.append(Tarea(
+                    grupo="m3_detallada", id=id_, cambios={**cambios, "mecanismo": mec}, semilla=0,
+                    detalle=True, etiquetas={"escenario": esc, "escenario_nombre": nombre},
+                    carpeta=str(salida / "corridas" / id_), **comun))
     else:
-        raise ValueError(f"experimento desconocido {experimento!r}; usa uno de {EXPERIMENTOS}")
+        raise ValueError(f"experimento desconocido {experimento!r}; usa uno de "
+                         f"{EXPERIMENTOS + EXPERIMENTOS_EXTRA}")
     return tareas
 
 
@@ -363,8 +426,8 @@ def correr(experimentos=EXPERIMENTOS, modo="rapido", semillas=None, nucleos=None
     nucleos = nucleos or max(1, (os.cpu_count() or 2) - 1)
     cfg_base = cargar_config(ruta_config)
     ruta_errores = salida / "errores.log"
-    pedidos = [e for e in EXPERIMENTOS if e in set(experimentos)]
-    desconocidos = set(experimentos) - set(EXPERIMENTOS)
+    pedidos = [e for e in EXPERIMENTOS + EXPERIMENTOS_EXTRA if e in set(experimentos)]
+    desconocidos = set(experimentos) - set(EXPERIMENTOS + EXPERIMENTOS_EXTRA)
     if desconocidos:
         raise ValueError(f"experimentos desconocidos: {sorted(desconocidos)}")
 
@@ -392,6 +455,16 @@ def correr(experimentos=EXPERIMENTOS, modo="rapido", semillas=None, nucleos=None
         elif exp == "sens":
             _escribir(df, salida / "sens_arquitectura.csv", verbose)
             salidas["sens_arq"] = df
+        elif exp == "m3":
+            if "grupo" in df.columns:
+                df = unificar_m3(df[df["grupo"] == "m3"])
+                _escribir(df, salida / "m3.csv", verbose)
+                presentes = [m for m in METRICAS_M3 if m in df.columns]
+                res_ic = metricas.resumen_ic(df, presentes, por=["escenario", "mecanismo"])
+                _escribir(res_ic, salida / "m3_resumen.csv", verbose)
+                if verbose:
+                    _imprimir_m3(res_ic)
+            salidas["m3"] = df
         elif exp == "detalladas":
             if verbose:
                 for t, r in zip(tareas, resultados):
@@ -401,6 +474,17 @@ def correr(experimentos=EXPERIMENTOS, modo="rapido", semillas=None, nucleos=None
         print(f"\n{n_errores} corridas fallaron; detalles en {ruta_errores}", flush=True)
     salidas["n_errores"] = n_errores
     return salidas
+
+
+def _imprimir_m3(res_ic):
+    """Tabla corta en consola — media de cada métrica por escenario, M2 contra M3."""
+    clave = ["dt_deteccion", "dt_respuesta", "area_quemada_ha", "falsos_descartados", "reales_descartados",
+             "area_doble_ha", "colisiones", "entradas_prohibidas", "entradas_sin_aviso"]
+    t = res_ic[res_ic["metrica"].isin(clave)].pivot_table(index=["escenario", "metrica"], columns="mecanismo",
+                                                         values="media")
+    with pd.option_context("display.width", 160, "display.max_rows", 200):
+        print("\nM2 contra M3 (media por escenario):")
+        print(t.round(2).to_string())
 
 
 # ---------------------------------------------------------------------------
@@ -413,8 +497,9 @@ def _argumentos(argv=None):
         description="Corre los experimentos de la propuesta y escribe los CSV en resultados/.")
     p.add_argument("--modo", choices=tuple(MODOS), default="rapido",
                    help="rapido: 10-80 ha y 5 semillas; completo: 10-160 ha y 20 semillas (por defecto rapido)")
-    p.add_argument("--solo", nargs="+", choices=EXPERIMENTOS, default=list(EXPERIMENTOS),
-                   metavar="EXP", help=f"experimentos a correr: {' '.join(EXPERIMENTOS)} (por defecto todos)")
+    p.add_argument("--solo", nargs="+", choices=EXPERIMENTOS + EXPERIMENTOS_EXTRA, default=list(EXPERIMENTOS),
+                   metavar="EXP", help=f"experimentos a correr{' '.join(EXPERIMENTOS)} (por defecto todos); "
+                   "m3 compara M2 contra M3 y solo corre si se pide")
     p.add_argument("--semillas", type=int, default=None, help="número de semillas (sobrescribe el del modo)")
     p.add_argument("--nucleos", type=int, default=None, help="procesos en paralelo (por defecto núcleos - 1)")
     p.add_argument("--salida", default=None, help=f"carpeta de salida (por defecto {SALIDA_POR_DEFECTO})")

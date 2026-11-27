@@ -25,9 +25,9 @@ import pandas as pd
 from matplotlib import animation
 from matplotlib import colors as mcolors
 from matplotlib import patheffects
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyBboxPatch, Patch
+from matplotlib.patches import FancyBboxPatch, Patch, Rectangle
 from matplotlib.ticker import FuncFormatter, MaxNLocator
 from matplotlib.transforms import ScaledTranslation
 from scipy import stats
@@ -39,7 +39,17 @@ NOMBRE_MECANISMO = {
     "M0": "M0 · franjas fijas",
     "M1": "M1 · Contract Net",
     "M2": "M2 · Contract Net + broadcast + blackboard",
+    "M3": "M3 · M2 + coordinador supervisor",
 }
+# M3 queda fuera de COLOR_MECANISMO (el contrato fija los tres colores de la propuesta)
+COLOR_M3 = "#c2338a"
+
+# Capa de eventos de M3 en el mapa (fuego, zona prohibida, herramientas)
+COLOR_FUEGO = "#f05a28"
+COLOR_QUEMADA = "#5b4636"
+COLOR_ZONA = "#d03b3b"
+COLOR_PIPA = "#2a78d6"
+COLOR_GRUA = "#eda100"
 ORDEN_MECANISMOS = ("M0", "M1", "M2")
 _COLORES_EXTRA = ("#6250d6", "#e87ba4", "#898781")  # solo para variantes fuera del contrato
 
@@ -62,6 +72,7 @@ GRUPO_DE_ESTADO = {
     "esperando_surco": "Esperas",
     "sin_tarea": "Ocio",
     "negociando": "Ocio",
+    "emergencia": "Traslado",   # M3 — misión del coordinador (apagar, enganchar, remolcar)
     # "terminado" y "fuera_servicio" quedan fuera del análisis
 }
 
@@ -257,6 +268,8 @@ def _formato_dinero(ax, eje="y"):
 def _color_mecanismo(m):
     if m in COLOR_MECANISMO:
         return COLOR_MECANISMO[m]
+    if m == "M3":
+        return COLOR_M3
     return _COLORES_EXTRA[abs(hash(m)) % len(_COLORES_EXTRA)]
 
 
@@ -601,10 +614,17 @@ def _dibujar_tractores(ax, rec, t, estela, etiquetas="intencion", tam=1.0):
             artistas.append(ln)
             (pt,) = ax.plot([ox], [oy], marker="x", ms=4 * tam, color=TINTA, mew=1.0, zorder=4)
             artistas.append(pt)
+        implemento = str(e.get("implemento", ""))
         if estado == "fuera_servicio":
             (m,) = ax.plot([x], [y], marker="X", ms=9 * tam, mfc=TINTA_3, mec="white", mew=1.0,
                            ls="", zorder=7)
-        elif str(e.get("implemento", "")) == "sembradora":
+        elif implemento == "pipa":
+            (m,) = ax.plot([x], [y], marker="D", ms=8 * tam, mfc=COLOR_PIPA, mec="white", mew=1.3,
+                           ls="", zorder=7)
+        elif implemento == "grua":
+            (m,) = ax.plot([x], [y], marker="s", ms=8 * tam, mfc=COLOR_GRUA, mec=TINTA, mew=1.1,
+                           ls="", zorder=7)
+        elif implemento == "sembradora":
             (m,) = ax.plot([x], [y], marker="o", ms=7.5 * tam, mfc=TINTA, mec="white", mew=1.5,
                            ls="", zorder=7)
         else:
@@ -616,13 +636,136 @@ def _dibujar_tractores(ax, rec, t, estela, etiquetas="intencion", tam=1.0):
             intencion = str(e.get("intencion", "") or "")
             if estado == "fuera_servicio":
                 texto += " · fuera de servicio"
+            elif implemento in ("pipa", "grua") and etiquetas == "intencion":
+                texto += f" · {implemento} · {intencion}"
             elif etiquetas == "intencion" and intencion not in ("", "ninguna", "nan"):
                 texto += f" · {intencion}"
             tx = ax.annotate(texto, (x, y), xytext=(6, 5), textcoords="offset points",
                              fontsize=7.5 * max(tam, 0.9), color=TINTA, zorder=8,
                              path_effects=_HALO)
             artistas.append(tx)
+    artistas += _lineas_remolque(ax, rec, t)
     return artistas
+
+
+def _lineas_remolque(ax, rec, t):
+    """Línea entre un tractor con grúa y el tractor descompuesto que lleva a la estación."""
+    actuales = {a: rec.en(a, t) for a in rec.agentes}
+    gruas = [(a, e) for a, e in actuales.items()
+             if e is not None and str(e.get("implemento", "")) == "grua" and str(e.get("intencion")) == "remolcar"]
+    out = []
+    for a, e in gruas:
+        for b, f in actuales.items():
+            if f is None or b == a or str(f.get("estado")) != "fuera_servicio":
+                continue
+            if abs(float(e["x"]) - float(f["x"])) + abs(float(e["y"]) - float(f["y"])) == 1:
+                (ln,) = ax.plot([e["x"], f["x"]], [e["y"], f["y"]], color=COLOR_GRUA, lw=2.4, zorder=6.5)
+                out.append(ln)
+    return out
+
+
+# ------------------------------------------------------------------ capa de eventos (M3)
+def _hay_eventos(corrida):
+    return corrida.get("eventos") is not None
+
+
+def _zona_en(eventos, t):
+    """Celdas de la zona prohibida vigente en el paso t (lista de [x, y])."""
+    zona = []
+    for z in eventos.get("zonas") or []:
+        if z["t"] <= t:
+            zona = z["celdas"]
+        else:
+            break
+    return zona
+
+
+def _mascaras_fuego(eventos, t):
+    tq = np.asarray(eventos["t_quemado"])
+    tf = np.asarray(eventos["t_fin_fuego"])
+    ardiendo = (tq >= 0) & (tq <= t) & ((tf < 0) | (tf > t))
+    quemada = (tq >= 0) & (tq <= t) & ~ardiendo
+    return ardiendo, quemada
+
+
+def _capa_eventos(ax, corrida, t):
+    """Fuego, celdas quemadas, obstáculos nuevos y zona prohibida en el paso t. Devuelve los artistas."""
+    ev = corrida.get("eventos")
+    if not ev:
+        return []
+    campo = corrida["campo"]
+    ancho, alto = int(campo["ancho"]), int(campo["alto"])
+    arts = []
+    ardiendo, quemada = _mascaras_fuego(ev, t)
+    if ardiendo.any() or quemada.any():
+        rgba = np.zeros((alto, ancho, 4))
+        rgba[quemada.T] = mcolors.to_rgba(COLOR_QUEMADA)
+        rgba[ardiendo.T] = mcolors.to_rgba(COLOR_FUEGO)
+        arts.append(ax.imshow(rgba, origin="lower", interpolation="nearest", zorder=2,
+                              extent=(-0.5, ancho - 0.5, -0.5, alto - 0.5)))
+    for (x, y, w, h, t0) in ev.get("obstaculos_nuevos") or []:
+        if t0 <= t:
+            arts.append(ax.add_patch(Rectangle((x - 0.5, y - 0.5), w, h, facecolor=COLOR_CELDA["obstaculo"],
+                                               edgecolor=COLOR_ZONA, lw=1.4, zorder=2.5)))
+    zona = _zona_en(ev, t)
+    if zona:
+        pc = PatchCollection([Rectangle((x - 0.5, y - 0.5), 1, 1) for x, y in zona], facecolor="none",
+                             edgecolor=COLOR_ZONA, linewidth=0.5, hatch="////", alpha=0.75, zorder=2.6)
+        arts.append(ax.add_collection(pc))
+    return arts
+
+
+def _handles_eventos(corrida):
+    ev = corrida.get("eventos")
+    if not ev:
+        return []
+    h = []
+    tq = np.asarray(ev.get("t_quemado", []))
+    if tq.size and (tq >= 0).any():
+        h += [Patch(facecolor=COLOR_FUEGO, label="Arde"), Patch(facecolor=COLOR_QUEMADA, label="Quemada")]
+    if ev.get("obstaculos_nuevos"):
+        h.append(Patch(facecolor=COLOR_CELDA["obstaculo"], edgecolor=COLOR_ZONA, label="Obstáculo nuevo"))
+    if ev.get("zonas"):
+        h.append(Patch(facecolor="none", edgecolor=COLOR_ZONA, hatch="////", label="Zona prohibida"))
+    pasos = corrida.get("pasos")
+    imps = set(pasos["implemento"].astype(str)) if pasos is not None and len(pasos) else set()
+    if "pipa" in imps:
+        h.append(Line2D([], [], marker="D", ls="", ms=7, mfc=COLOR_PIPA, mec="white", label="Tractor con pipa de agua"))
+    if "grua" in imps:
+        h.append(Line2D([], [], marker="s", ls="", ms=7, mfc=COLOR_GRUA, mec=TINTA, label="Tractor con grúa"))
+    return h
+
+
+def registro_coordinador(corrida, solo_coordinador=False, tipos=None):
+    """Tabla del registro de M3 (eventos del mundo, avisos y decisiones del coordinador con su motivo).
+
+    Columnas — ``t``, ``hora`` (h desde el inicio), ``fuente``, ``tipo``, ``tractor``, ``texto``, ``motivo``."""
+    reg = corrida.get("registro")
+    if reg is None or len(reg) == 0:
+        return pd.DataFrame(columns=["t", "hora", "fuente", "tipo", "tractor", "texto", "motivo"])
+    reg = pd.DataFrame(reg).copy()
+    if solo_coordinador:
+        reg = reg[reg["fuente"] == "coordinador"]
+    if tipos is not None:
+        reg = reg[reg["tipo"].isin(list(tipos))]
+    reg.insert(1, "hora", (reg["t"].astype(float) * _paso_h(corrida.get("resumen", {}))).round(2))
+    return reg[["t", "hora", "fuente", "tipo", "tractor", "texto", "motivo"]].reset_index(drop=True)
+
+
+def _lineas_registro(corrida, t, n=9, ancho=78):
+    reg = corrida.get("registro")
+    if reg is None or len(reg) == 0:
+        return ""
+    reg = pd.DataFrame(reg)
+    ruido = (reg["tipo"] == "subasta") | ((reg["tipo"] == "aviso") & reg["evento"].isin(["reporte", "latido", "incendio"]))
+    reg = reg[(reg["t"] <= t) & ~ruido].tail(n)
+    paso_h = _paso_h(corrida.get("resumen", {}))
+    lineas = []
+    for _i, f in reg.iterrows():
+        marca = "•" if f["fuente"] == "mundo" else ("»" if f["tipo"] in ("decision", "plan") else "·")
+        texto = f"{marca} {float(f['t']) * paso_h:5.1f} h  {f['texto']}"
+        lineas.append(textwrap.shorten(texto, ancho, placeholder="…"))
+    return "\n".join(lineas)
 
 
 def mapa_campo(ax, corrida, t=None, estela=None, etiquetas="intencion", leyenda=True, titulo=None):
@@ -638,6 +781,7 @@ def mapa_campo(ax, corrida, t=None, estela=None, etiquetas="intencion", leyenda=
     estela = int(1.5 * alto) if estela is None else int(estela)
     cod = estado_celdas(corrida["celdas"], t)
     _base_mapa(ax, corrida, cod)
+    _capa_eventos(ax, corrida, t)
     pasos = corrida.get("pasos")
     if pasos is not None and len(pasos):
         _dibujar_tractores(ax, _Recorridos(pasos), t, estela, etiquetas)
@@ -650,7 +794,8 @@ def mapa_campo(ax, corrida, t=None, estela=None, etiquetas="intencion", leyenda=
     if leyenda:
         incluir = [e for e in ESTADOS_CELDA if e != "obstaculo" or (cod == 5).any()]
         ax.legend(handles=_handles_celdas(incluir)
-                  + _handles_tractores(estela, etiquetas == "intencion", _hay_falla(corrida)),
+                  + _handles_tractores(estela, etiquetas == "intencion", _hay_falla(corrida))
+                  + _handles_eventos(corrida),
                   loc="upper left", bbox_to_anchor=(1.02, 1.0), title="Estado de celda y agentes",
                   alignment="left")
     return fig
@@ -701,14 +846,26 @@ def animacion(corrida, n_cuadros=80, dpi=80, intervalo_ms=120, estela=None):
     estela = int(1.5 * alto) if estela is None else int(estela)
     r = corrida.get("resumen", {})
     proporcion = campo["alto"] / campo["ancho"]
-    fig = plt.figure(figsize=(8.0, 4.4 * proporcion + 1.2), dpi=dpi)
-    ax = fig.add_axes((0.075, 0.1, 0.55, 0.74))
+    con_registro = corrida.get("registro") is not None and len(corrida["registro"]) > 0
+    if con_registro:
+        # M3 — a la derecha va la leyenda y, debajo, los últimos avisos y decisiones del coordinador
+        fig = plt.figure(figsize=(13.0, max(6.8, 5.6 * proporcion + 1.2)), dpi=dpi)
+        ax = fig.add_axes((0.045, 0.08, 0.44, 0.8))
+    else:
+        fig = plt.figure(figsize=(8.0, 4.4 * proporcion + 1.2), dpi=dpi)
+        ax = fig.add_axes((0.075, 0.1, 0.55, 0.74))
     cod = estado_celdas(corrida["celdas"], ts[0])
     im = _base_mapa(ax, corrida, cod)
     hay_obst = (np.asarray(corrida["celdas"]["tipo_base"]) == TIPO_OBSTACULO).any()
     incluir = [e for e in ESTADOS_CELDA if e != "obstaculo" or hay_obst]
-    ax.legend(handles=_handles_celdas(incluir) + _handles_tractores(estela, True, _hay_falla(corrida)),
-              loc="upper left", bbox_to_anchor=(1.03, 1.0), fontsize=8)
+    ax.legend(handles=_handles_celdas(incluir) + _handles_tractores(estela, True, _hay_falla(corrida))
+              + _handles_eventos(corrida),
+              loc="upper left", bbox_to_anchor=(1.03, 1.0), fontsize=8, ncols=2 if con_registro else 1)
+    texto_reg = None
+    if con_registro:
+        fig.text(0.52, 0.42, "Registro (• mundo · » decisión del coordinador)", fontsize=8.5,
+                 fontweight="semibold", color=TINTA, va="bottom")
+        texto_reg = fig.text(0.52, 0.405, "", fontsize=7.4, color=TINTA, va="top", family="DejaVu Sans Mono")
     titulo = ax.set_title("", loc="left", pad=20, fontsize=11, fontweight="semibold")
     ax.annotate(_texto_corrida(corrida), xy=(0, 1), xycoords="axes fraction", xytext=(0, 6),
                 textcoords="offset points", fontsize=7.5, color=TINTA_2, va="bottom")
@@ -722,8 +879,11 @@ def animacion(corrida, n_cuadros=80, dpi=80, intervalo_ms=120, estela=None):
         dinamicos.clear()
         t = int(ts[i])
         im.set_data(estado_celdas(corrida["celdas"], t).T)
+        dinamicos.extend(_capa_eventos(ax, corrida, t))
         if rec is not None:
             dinamicos.extend(_dibujar_tractores(ax, rec, t, estela, "intencion"))
+        if texto_reg is not None:
+            texto_reg.set_text(_lineas_registro(corrida, t))
         pct = fraccion_sembrada(corrida["celdas"], t) * 100
         titulo.set_text(f"Paso {t:,} · {t * _paso_h(r):.1f} h · {pct:.0f} % sembrado")
         return [im, titulo, *dinamicos]

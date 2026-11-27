@@ -6,7 +6,23 @@ import math
 from pathlib import Path
 
 RUTA_BASE = Path(__file__).resolve().parent.parent / "config" / "parametros.json"
-MECANISMOS = ("M0", "M1", "M2")
+MECANISMOS = ("M0", "M1", "M2")          # los del barrido y los escenarios de la propuesta
+MECANISMOS_VALIDOS = MECANISMOS + ("M3",)  # M3 — coordinador supervisor (docs/m3.md)
+
+# Valores por defecto de las secciones de M3. Son opcionales — una configuración sin ellas sigue
+# siendo válida y M0, M1 y M2 no las usan mientras los eventos estén apagados.
+DEFECTO_COORDINADOR = {
+    "periodo_revision": 15, "sectores_revision": 3, "vigencia_vista": 60, "periodo_latido": 5,
+    "latidos_perdidos": 3, "radio_percepcion": 2, "prob_no_detectar": 0.1, "tasa_reporte_falso": 0.0,
+    "margen_zona": 1, "margen_zona_max": 2, "alcance_pipa": 3, "agua_celdas": 60, "apagado_por_paso": 3, "n_pipas": 1,
+    "n_gruas": 1, "enganche_min": 5, "reparacion_min": 60, "paciencia_plan": 40,
+    "crecimiento_fuego": 1.5, "peso_tiempo": 1.0, "peso_trabajo": 1.0, "peso_energia": 50.0,
+    "peso_riesgo": 30.0,
+}
+DEFECTO_EVENTOS = {
+    "incendio": {"activo": False, "cobertura_disparo": 0.3, "prob_propagacion": 0.02, "duracion_pasos": 60},
+    "obstaculo_nuevo": {"activo": False, "cobertura_disparo": 0.4, "ancho": 2, "alto": 2},
+}
 
 
 class ErrorConfig(ValueError):
@@ -116,8 +132,8 @@ def validar(cfg):
         elif not _cumple(v, regla):
             errores.append(f"{ruta} {TEXTO_REGLA[regla]}, no {v!r}")
 
-    if cfg.get("mecanismo") not in MECANISMOS:
-        errores.append(f"mecanismo debe ser uno de {MECANISMOS}, no {cfg.get('mecanismo')!r}")
+    if cfg.get("mecanismo") not in MECANISMOS_VALIDOS:
+        errores.append(f"mecanismo debe ser uno de {MECANISMOS_VALIDOS}, no {cfg.get('mecanismo')!r}")
     if not (isinstance(cfg.get("semilla"), int) and not isinstance(cfg.get("semilla"), bool)):
         errores.append(f"semilla debe ser un entero, no {cfg.get('semilla')!r}")
     if not isinstance(cfg["falla"].get("activa"), bool):
@@ -160,9 +176,82 @@ def validar(cfg):
                 errores.append(f"obstáculo {i} cae en una cabecera o en el patio del depósito "
                                f"(filas de trabajo {alto_trabajo[0]} a {alto_trabajo[1]})")
 
+    errores += _errores_m3(cfg)
     if errores:
         raise ErrorConfig("Configuración inválida:\n- " + "\n- ".join(errores))
     return True
+
+
+REGLAS_COORDINADOR = {
+    "periodo_revision": "ent1", "sectores_revision": "ent1", "vigencia_vista": "ent1",
+    "periodo_latido": "ent1", "latidos_perdidos": "ent1", "radio_percepcion": "ent1",
+    "prob_no_detectar": "frac", "tasa_reporte_falso": "frac", "margen_zona": "ent0",
+    "margen_zona_max": "ent0", "alcance_pipa": "ent1", "agua_celdas": "ent1", "apagado_por_paso": "ent1",
+    "n_pipas": "ent1",
+    "n_gruas": "ent1", "enganche_min": "nneg", "reparacion_min": "nneg", "paciencia_plan": "ent1",
+    "crecimiento_fuego": "pos", "peso_tiempo": "nneg", "peso_trabajo": "nneg", "peso_energia": "nneg",
+    "peso_riesgo": "nneg",
+}
+REGLAS_EVENTOS = {
+    "incendio": {"cobertura_disparo": "frac", "prob_propagacion": "frac", "duracion_pasos": "ent1"},
+    "obstaculo_nuevo": {"cobertura_disparo": "frac", "ancho": "ent1", "alto": "ent1"},
+}
+
+
+def _errores_m3(cfg):
+    """Revisa las secciones opcionales `coordinador` y `eventos` (solo si vienen en cfg)."""
+    errores = []
+    co = cfg.get("coordinador")
+    if co is not None:
+        if not isinstance(co, dict):
+            return ["coordinador debe ser una sección (objeto JSON)"]
+        for llave, regla in REGLAS_COORDINADOR.items():
+            if llave in co and not _cumple(co[llave], regla):
+                errores.append(f"coordinador.{llave} {TEXTO_REGLA[regla]}, no {co[llave]!r}")
+        p = parametros_m3(cfg)["coordinador"]
+        if _cumple(p["margen_zona"], "ent0") and _cumple(p["margen_zona_max"], "ent0") \
+                and p["margen_zona_max"] < p["margen_zona"]:
+            errores.append("coordinador.margen_zona_max no puede ser menor que coordinador.margen_zona")
+        if _cumple(p["alcance_pipa"], "ent1") and _cumple(p["margen_zona_max"], "ent0") \
+                and p["alcance_pipa"] <= p["margen_zona_max"]:
+            errores.append("coordinador.alcance_pipa debe ser mayor que coordinador.margen_zona_max "
+                           "(la pipa apaga desde fuera de la zona prohibida)")
+    ev = cfg.get("eventos")
+    if ev is not None:
+        if not isinstance(ev, dict):
+            return errores + ["eventos debe ser una sección (objeto JSON)"]
+        for nombre, reglas in REGLAS_EVENTOS.items():
+            sub = ev.get(nombre)
+            if sub is None:
+                continue
+            if not isinstance(sub, dict):
+                errores.append(f"eventos.{nombre} debe ser una sección (objeto JSON)")
+                continue
+            if "activo" in sub and not isinstance(sub["activo"], bool):
+                errores.append(f"eventos.{nombre}.activo debe ser true o false")
+            for llave, regla in reglas.items():
+                if llave in sub and not _cumple(sub[llave], regla):
+                    errores.append(f"eventos.{nombre}.{llave} {TEXTO_REGLA[regla]}, no {sub[llave]!r}")
+    return errores
+
+
+def parametros_m3(cfg):
+    """Secciones `coordinador` y `eventos` completas (los valores que falten toman el defecto)."""
+    co = dict(DEFECTO_COORDINADOR)
+    co.update(cfg.get("coordinador") or {})
+    ev = {}
+    for nombre, defecto in DEFECTO_EVENTOS.items():
+        ev[nombre] = dict(defecto)
+        ev[nombre].update((cfg.get("eventos") or {}).get(nombre) or {})
+    return {"coordinador": co, "eventos": ev}
+
+
+def derivados_m3(cfg):
+    """Tiempos de M3 en pasos (aparte de `derivados` para no cambiar su contrato)."""
+    d = derivados(cfg)
+    co = parametros_m3(cfg)["coordinador"]
+    a_pasos = lambda minutos: max(1, int(round(minutos * 60 / d["paso_s"])))
+    return {"pasos_enganche": a_pasos(co["enganche_min"]), "pasos_reparacion": a_pasos(co["reparacion_min"])}
 
 
 def derivados(cfg):

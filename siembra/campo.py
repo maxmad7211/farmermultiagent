@@ -10,6 +10,8 @@ from .config import lado_campo
 
 # Estados dinámicos de cada celda (lista de listas para acceso rápido en Python)
 PATIO, CABECERA, LIBRE, SURCADA, SEMBRADA, OBSTACULO = 0, 1, 2, 3, 4, 5
+# M3 — celda alcanzada por el fuego (se pierde lo que tenía). Solo aparece con eventos activos.
+QUEMADA = 6
 # Código del tipo base que se exporta en celdas["tipo_base"]
 TIPO_TRABAJO = 2
 
@@ -89,6 +91,8 @@ class Campo:
         self.t_surcado = np.full(forma, -1, dtype=np.int32)
         self.t_sembrado = np.full(forma, -1, dtype=np.int32)
         self.pasadas = np.zeros(forma, dtype=np.int32)
+        self.t_quemado = np.full(forma, -1, dtype=np.int32)   # M3 — paso en que la alcanzó el fuego
+        self.obstaculos_nuevos = []                           # M3 — [x, y, ancho, alto, t] que aparecen después
         self.n_surcadas = 0
         self.n_sembradas = 0
 
@@ -144,6 +148,31 @@ class Campo:
             self.n_sembradas += 1
             return True
         return False
+
+    def quemar(self, c, t):
+        """El fuego alcanza una celda de trabajo — se pierde lo surcado o sembrado. True si ardió."""
+        x, y = c
+        e = self.est[x][y]
+        if e in (OBSTACULO, QUEMADA) or not (self.y0 <= y <= self.y1):
+            return False
+        if e == SEMBRADA:
+            self.n_sembradas -= 1   # la cobertura cuenta solo lo que sigue sembrado
+        self.est[x][y] = QUEMADA
+        self.t_quemado[c] = t
+        return True
+
+    def poner_obstaculo(self, x, y, w, h, t):
+        """Aparece un obstáculo que no estaba en el mapa (M3). Devuelve sus celdas."""
+        celdas = []
+        for i in range(x, x + w):
+            for j in range(y, y + h):
+                if self.est[i][j] == SEMBRADA:
+                    self.n_sembradas -= 1
+                if self.est[i][j] != OBSTACULO:
+                    self.est[i][j] = OBSTACULO
+                    celdas.append((i, j))
+        self.obstaculos_nuevos.append([x, y, w, h, t])
+        return celdas
 
     def hilera_completa(self, x, tipo):
         objetivo = SEMBRADA if tipo == "sembrar" else SURCADA

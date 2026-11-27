@@ -2,13 +2,15 @@
 
 Tractor: capa deliberativa (elige hilera, planea ruta con A* o WHCA*, decide recargas) y capa
 reactiva (la resuelve el modelo en `_resolver`: nadie entra a una celda ocupada).
-Gestor: iniciador de Contract Net para todas las hileras (M1 y M2).
+Gestor: iniciador de Contract Net para todas las hileras (M1, M2 y M3).
+M3 agrega el coordinador supervisor y la parte del tractor que habla con él (coordinador.py).
 """
 
 import agentpy as ap
 
-from .campo import LIBRE, SEMBRADA, manhattan
+from .campo import LIBRE, OBSTACULO, QUEMADA, SEMBRADA, manhattan
 from .comunicacion import GESTOR
+from .coordinador import COORD, EMERGENCIA, TractorM3
 from .planificador import DistanciaReal, astar, whca
 
 # Estados por paso (figura 2 de la propuesta + ruta_deposito)
@@ -25,19 +27,20 @@ CAMBIANDO = "cambiando_implemento"
 FUERA = "fuera_servicio"
 TERMINADO = "terminado"
 ESTADOS = [SIN_TAREA, NEGOCIANDO, EN_RUTA, TRABAJANDO, ESPERANDO_CELDA, ESPERANDO_SURCO,
-           RUTA_DEPOSITO, EN_FILA, RECARGANDO, CAMBIANDO, FUERA, TERMINADO]
+           RUTA_DEPOSITO, EN_FILA, RECARGANDO, CAMBIANDO, FUERA, TERMINADO, EMERGENCIA]
 ESTADOS_ESPERA = {SIN_TAREA, NEGOCIANDO, ESPERANDO_CELDA, ESPERANDO_SURCO, EN_FILA}
 
 SURCADOR, SEMBRADORA = "surcador", "sembradora"
 TIPO = {SURCADOR: "surcar", SEMBRADORA: "sembrar"}
 
-# Modos lógicos (qué está haciendo el tractor); el estado por paso se deriva de aquí
+# Modos lógicos (qué está haciendo el tractor); el estado por paso se deriva de aquí.
+# M_MISION (7, misión del coordinador de M3) está en coordinador.py.
 M_LIBRE, M_NEGOCIA, M_TAREA, M_DEPOSITO, M_SERVICIO, M_TERMINADO, M_FUERA = range(7)
 
 THETA = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
 
 
-class Tractor(ap.Agent):
+class Tractor(TractorM3, ap.Agent):
 
     def setup(self, nombre, implemento, pos, franja=(), estacionamiento=None):
         m = self.model
@@ -88,17 +91,24 @@ class Tractor(ap.Agent):
         self.celdas_trabajadas = 0
         self.hileras = 0
         self.recargas = 0
+        self.cede_hasta = -1
+        self._setup_m3()
 
     # ------------------------------------------------------------------ ciclo por paso
     def decidir(self, t):
+        m = self.model
         self.deseo = None
         self.movio = False
         self.vetado = False
         if self.modo == M_FUERA:
             self.estado = FUERA
             self.intencion = "ninguna"
+            if self.reparando:
+                self._paso_reparacion(t)
             return
         self._leer_buzon(t)
+        if m.m3_activo and self._paso_m3(t):
+            return
 
         if self.modo == M_SERVICIO:
             self.servicio -= 1
@@ -148,6 +158,11 @@ class Tractor(ap.Agent):
             if self.modo == M_TERMINADO:
                 self.estado, self.intencion = TERMINADO, "estacionar"
                 self.objetivo = self.estacionamiento
+                if m.coordinador is not None and self._ceder_estacionado(t):
+                    return
+                if m.coordinador is not None and t < self.cede_hasta:
+                    self._quieto(t)   # acaba de quitarse — espera a que el otro salga antes de volver
+                    return
                 if self.pos != self.estacionamiento:
                     self.deseo = self._paso_hacia(t, self.estacionamiento)
                 else:
@@ -197,15 +212,21 @@ class Tractor(ap.Agent):
         self.estado = FUERA
         m.bloqueadas.add(self.pos)
         m.fila.pop(self.nombre, None)
-        if m.mec == "M2":
+        if m.cooperativo:
             m.reservas.liberar_todo(self.nombre)
+        if m.mec == "M2":
             # Broadcast de falla: el gestor reanuncia la hilera de inmediato
             m.bus.difundir(t, "inform", self.nombre, [GESTOR] + [tr.nombre for tr in m.orden], info)
+        elif m.coordinador is not None:
+            # M3 — solo le avisa al coordinador (el mensaje se puede perder; si no, lo nota por los latidos)
+            m.bus.enviar(t, "inform", self.nombre, COORD, {**info, "pos": list(self.pos)})
         self.tarea, self.cola, self.siguiente = None, [], None
 
     # ------------------------------------------------------------------ trabajo
     def _hecha(self, c):
         e = self.model.campo.estado(c)
+        if e == QUEMADA or e == OBSTACULO:
+            return True   # M3 — se perdió (fuego u obstáculo nuevo); ya no hay nada que hacer ahí
         return e == SEMBRADA if self.implemento == SEMBRADORA else e != LIBRE
 
     def _trabajar_celda(self, t):
@@ -243,6 +264,9 @@ class Tractor(ap.Agent):
             if manhattan(self.pos, c) <= 1 and (self._hecha(c) or c in m.bloqueadas):
                 self.cola.pop(0)
                 continue
+            if c in self._perdidas_conocidas:   # M3 — sabe que ahí hay fuego u obstáculo
+                self.cola.pop(0)
+                continue
             break
         if (m.gestor is not None and m.c["oferta_anticipada"] and not self.aviso_casi
                 and len(self.cola) <= m.k_anticipo):
@@ -253,6 +277,20 @@ class Tractor(ap.Agent):
             return True
         c = self.cola[0]
         self.objetivo = c
+        if c in self._vedadas:
+            # M3 — la siguiente celda está en zona prohibida o junto al fuego; espera fuera de ella
+            self.espera_zona += 1
+            if m.gestor is not None and self.espera_zona > 2 * m.campo.largo_hilera:
+                self._informar(t, "liberada", tipo, x, siguiente=list(c), restantes=len(self.cola), dir=self.dir)
+                self.tarea, self.cola = None, []
+                self.espera_zona = 0
+                self._soltar_siguiente(t)
+                self.modo = M_LIBRE
+                return True
+            self.estado, self.intencion = ESPERANDO_CELDA, "esperar"
+            self._quieto(t)
+            return False
+        self.espera_zona = 0
         if c == self.pos:
             # Quedó parado sobre una celda pendiente (llegó sin poder trabajarla): la trabaja aquí si ya se puede
             puede = (m.campo.estado(c) == LIBRE if self.implemento == SURCADOR
@@ -323,7 +361,7 @@ class Tractor(ap.Agent):
         if m.gestor is not None:
             self._informar(t, "fin", tipo, x, dir=self.dir)
         self.tarea, self.cola, self.aviso_casi = None, [], False
-        if m.mec == "M2" and self.siguiente:
+        if m.cooperativo and self.siguiente:
             motivo = self._anticipar_recarga()
             if motivo:
                 self._soltar_siguiente(t)
@@ -375,7 +413,7 @@ class Tractor(ap.Agent):
                 return "cambio"
             self.modo = M_TERMINADO
             return "cambio"
-        if m.mec == "M2":
+        if m.cooperativo:
             motivo = self._anticipar_recarga()
             if motivo:
                 self._ir_deposito(t, motivo)
@@ -427,7 +465,7 @@ class Tractor(ap.Agent):
         self.motivo = motivo
         self.ruta = []
         self.bloqueado_fila = 0
-        if m.mec == "M2":
+        if m.cooperativo:
             m.fila[self.nombre] = t + manhattan(self.pos, m.campo.deposito)
             otros = [tr.nombre for tr in m.orden if tr.modo != M_FUERA]
             m.bus.difundir(t, "inform", self.nombre, otros, {"evento": "recarga", "motivo": motivo})
@@ -435,7 +473,8 @@ class Tractor(ap.Agent):
     def _paso_deposito(self, t):
         m = self.model
         dep = m.campo.deposito
-        self.intencion = "cambiar" if self.motivo == "cambio" else "recargar"
+        self.intencion = {"cambio": "cambiar", "pipa": "enganchar pipa", "grua": "enganchar grua",
+                          "agua": "llenar pipa", "devolver": "regresar herramienta"}.get(self.motivo, "recargar")
         self.objetivo = dep
         if self.pos == dep:
             self._iniciar_servicio(t)
@@ -443,7 +482,7 @@ class Tractor(ap.Agent):
             return
         d = manhattan(self.pos, dep)
         ocupado = m.en_servicio is not None  # la estación está ocupada si alguien está cargando
-        if m.mec == "M2":
+        if m.cooperativo:
             # El blackboard ordena la fila por la hora estimada de llegada que cada tractor anotó al
             # formarse (fija: si se actualizara cada paso, cada uno compararía contra datos viejos)
             en_espera = sorted((eta, n) for n, eta in m.fila.items()
@@ -458,7 +497,8 @@ class Tractor(ap.Agent):
             if d == 1 and self.bloqueado_fila > m.paciencia:
                 # Se hace a un lado para no tapar la salida del depósito
                 for v in m.campo.vecinos[self.pos]:
-                    if manhattan(v, dep) == 2 and m.ocupante(v) is None and v not in m.bloqueadas:
+                    if (manhattan(v, dep) == 2 and m.ocupante(v) is None and v not in m.bloqueadas
+                            and v not in self._vedadas):
                         self.deseo = v
                         return
             self._quieto(t)
@@ -471,7 +511,11 @@ class Tractor(ap.Agent):
     def _iniciar_servicio(self, t):
         m = self.model
         a = m.cfg["agente"]
-        if self.motivo == "cambio":
+        extra = self._servicio_m3(self.motivo) if m.m3_activo else None
+        if extra is not None:
+            base = extra   # M3 — enganchar o regresar la pipa o la grúa, o llenar la pipa
+            self.estado_servicio = CAMBIANDO
+        elif self.motivo == "cambio":
             base = m.d["pasos_cambio"]
             self.estado_servicio = CAMBIANDO
         else:
@@ -490,6 +534,7 @@ class Tractor(ap.Agent):
 
     def _fin_servicio(self, t):
         m = self.model
+        motivo = self.motivo
         self.diesel = float(m.cfg["agente"]["tanque_l"])
         if self.motivo == "cambio":
             self.implemento = SEMBRADORA
@@ -504,6 +549,8 @@ class Tractor(ap.Agent):
         if m.en_servicio == self.nombre:
             m.en_servicio = None
         self.motivo = None
+        if m.m3_activo and self._fin_servicio_m3(t, motivo):
+            return
         if self.suspendida:
             (self.tarea, self.cola, self.dir), self.suspendida = self.suspendida, None
             self.modo = M_TAREA
@@ -525,6 +572,9 @@ class Tractor(ap.Agent):
             return
         for msg in m.bus.recibir(self.nombre, t):
             p, c = msg.performativa, msg.contenido
+            if msg.emisor == COORD:
+                self._mensaje_coord(t, msg)
+                continue
             if p == "cfp":
                 self._responder_cfp(t, c)
             elif p == "accept-proposal":
@@ -547,6 +597,10 @@ class Tractor(ap.Agent):
                 ev = c.get("evento")
                 if ev == "fin_tipo":
                     self.fin_tipo = c.get("tipo")  # se atiende en cuanto quede libre, aunque llegue ocupado
+                elif ev == "reactivar" and self.modo == M_TERMINADO and c.get("tipo") == TIPO[self.implemento]:
+                    # M3: quedaron celdas de su labor sin trabajar; vuelve a ofertar
+                    self.modo = M_LIBRE
+                    self.fin_tipo = None
                 elif ev == "falla":
                     self.fallados_conocidos.add(msg.emisor)
         if self.fin_tipo == TIPO[self.implemento] and self.modo in (M_LIBRE, M_NEGOCIA):
@@ -571,8 +625,14 @@ class Tractor(ap.Agent):
         ofertas = []
         for tarea in c["tareas"]:
             inicio = self._inicio_tarea(tarea, origen)
+            if inicio in self._perdidas_conocidas:
+                inicio = self._saltar_perdidas(tarea, inicio)   # M3 — empieza en un obstáculo o en lo quemado
+                if inicio is None:
+                    continue
+            if inicio in self._vedadas:
+                continue   # M3 — no oferta por una hilera que empieza en zona prohibida
             restantes = tarea.get("restantes") or len(m.campo.columnas[tarea["x"]])
-            if m.mec == "M2" and self.implemento == SEMBRADORA and restantes > tolva_disp:
+            if m.cooperativo and self.implemento == SEMBRADORA and restantes > tolva_disp:
                 continue
             dist = manhattan(origen, inicio)
             ofertas.append({"x": tarea["x"], "u": V - costo * dist, "dist": dist})
@@ -585,6 +645,15 @@ class Tractor(ap.Agent):
         self.t_neg = t
         if self.modo == M_LIBRE:
             self.modo = M_NEGOCIA
+
+    def _saltar_perdidas(self, tarea, inicio):
+        """M3 — primera celda de la hilera, desde `inicio` en su sentido, que no esté perdida."""
+        col = self.model.campo.columnas[tarea["x"]]
+        d = tarea.get("dir") or (1 if inicio == col[0] else -1)
+        for c in (col if d == 1 else col[::-1]):
+            if (c[1] >= inicio[1] if d == 1 else c[1] <= inicio[1]) and c not in self._perdidas_conocidas:
+                return c
+        return None
 
     def _inicio_tarea(self, tarea, origen):
         col = self.model.campo.columnas[tarea["x"]]
@@ -601,7 +670,7 @@ class Tractor(ap.Agent):
     def _quieto(self, t):
         self.deseo = None
         m = self.model
-        if m.mec != "M2" or self.modo == M_SERVICIO:
+        if not m.cooperativo or self.modo == M_SERVICIO:
             return  # en servicio ya quedó reservado al inicio del paso
         res = m.reservas
         res.liberar_futuro(self.nombre, t)
@@ -611,8 +680,8 @@ class Tractor(ap.Agent):
             pendientes = set(self.cola)
             vecinos = sorted(m.campo.vecinos[self.pos], key=lambda v: (m.campo.es_trabajo(v), v))
             for v in vecinos:
-                if v in pendientes or v == m.campo.deposito:
-                    continue  # no pisa lo que le falta trabajar ni se mete a la estación
+                if v in pendientes or v == m.campo.deposito or v in self._vedadas:
+                    continue  # no pisa lo que le falta trabajar, ni se mete a la estación o a zona prohibida
                 if (v not in m.bloqueadas and m.ocupante(v) is None and res.libre(v, t, self.nombre)
                         and res.libre(v, t + 1, self.nombre) and res.libre(v, t + 2, self.nombre)):
                     self.deseo = v
@@ -652,9 +721,10 @@ class Tractor(ap.Agent):
             return None
         if meta != m.campo.deposito:
             evitar = evitar | {m.campo.deposito}  # la estación no es camino de paso
-        if m.mec == "M2":
+        if m.cooperativo:
             return self._paso_whca(t, meta, evitar)
-        bloqueadas = m.bloqueadas | evitar if evitar else m.bloqueadas
+        base = self._bloq()   # M3 — suma la zona prohibida y lo que vio peligroso
+        bloqueadas = base | evitar if evitar else base
         if self.bloqueado >= self.paciencia:
             siguiente = self.ruta[0] if self.ruta else None
             otro = m.ocupante(siguiente) if siguiente else None
@@ -675,9 +745,31 @@ class Tractor(ap.Agent):
                     return r[0]
         if not (self.ruta and self.meta_ruta == meta and self.ruta[0] in m.campo.vecinos[self.pos]):
             self.ruta = astar(m.campo, self.pos, meta, bloqueadas) or (
-                astar(m.campo, self.pos, meta, m.bloqueadas) if evitar else None) or []
+                astar(m.campo, self.pos, meta, base) if evitar else None) or []
             self.meta_ruta = meta
         return self.ruta[0] if self.ruta else None
+
+    def _ceder_estacionado(self, t):
+        """M3 — un tractor que ya terminó se quita si tiene al lado a otro que lleva rato atorado (en el
+        patio, con la grúa y las reparaciones, un estacionado puede encerrar a otro en una esquina)."""
+        m = self.model
+        atorados = [tr for tr in m.orden if tr is not self and tr.modo not in (M_FUERA, M_TERMINADO)
+                    and manhattan(tr.pos, self.pos) == 1 and tr.bloqueado >= 2 * tr.paciencia]
+        if not atorados:
+            return False
+        ocupadas = {tr.pos for tr in m.orden if tr is not self}
+        opciones = [v for v in m.campo.vecinos[self.pos]
+                    if v not in ocupadas and v not in m.bloqueadas and v != m.campo.deposito
+                    and v not in self._vedadas]
+        if not opciones:
+            return False
+        lejos = max(opciones, key=lambda v: (min(manhattan(v, tr.pos) for tr in atorados), v))
+        self.deseo = lejos
+        self.cede_hasta = t + 2 * m.paciencia + 2
+        if m.cooperativo:
+            m.reservas.liberar_futuro(self.nombre, t)
+            m.reservas.reservar(self.nombre, lejos, t + 1)
+        return True
 
     def _ceder(self, otro):
         """Retrocede a una celda libre que no sea la del otro tractor (prefiere no pisar hileras)."""
@@ -685,7 +777,7 @@ class Tractor(ap.Agent):
         pendientes = set(self.cola)
         opciones = [v for v in m.campo.vecinos[self.pos]
                     if v != otro.pos and v not in m.bloqueadas and m.ocupante(v) is None
-                    and v not in pendientes and v != m.campo.deposito]
+                    and v not in pendientes and v != m.campo.deposito and v not in self._vedadas]
         if not opciones:
             return None
         opciones.sort(key=lambda v: (m.campo.es_trabajo(v), v))
@@ -696,21 +788,27 @@ class Tractor(ap.Agent):
         m = self.model
         res = m.reservas
         res.liberar_futuro(self.nombre, t)
-        bloqueadas = m.bloqueadas | evitar if evitar else m.bloqueadas
+        base = self._bloq()
+        bloqueadas = base | evitar if evitar else base
         if self.bloqueado >= 3 * self.paciencia:
-            bloqueadas = bloqueadas | {tr.pos for tr in m.orden if tr is not self and tr.pos != meta}
+            otros = {tr.pos for tr in m.orden if tr is not self and tr.pos != meta}
+            bloqueadas = bloqueadas | otros
+            if m.coordinador is not None:
+                # M3 — si tiene que dejar de evitar su hilera para salir del bloqueo, sigue evitando a los
+                # demás tractores (en M2 se conserva el comportamiento original)
+                base = base | otros
             self.bloqueado = 0
         W = m.c["ventana_reservas"]
         h = None
         if manhattan(self.pos, meta) > 2:
-            clave = (meta, len(evitar), len(m.bloqueadas))
+            clave = (meta, len(evitar), len(base), self.zona_v)
             if self._h_clave != clave:
                 self._h_clave = clave
                 self._h = DistanciaReal(m.campo, meta, self.pos, bloqueadas)
             h = self._h
         plan = whca(m.campo, self.pos, meta, t, W, res, self.nombre, bloqueadas, h)
         if not plan and evitar:
-            plan = whca(m.campo, self.pos, meta, t, W, res, self.nombre, m.bloqueadas)
+            plan = whca(m.campo, self.pos, meta, t, W, res, self.nombre, base)
         if not plan:
             res.reservar(self.nombre, self.pos, t + 1)
             return None
@@ -766,6 +864,9 @@ class Gestor:
         if tarea is None or tarea["estado"] == "completa":
             return
         g = tarea["ganador"]
+        if g is not None and g == self.m.tractor_fallado and self.m.fallado_activo:
+            self.m.contar_reasignacion(clave, inicio if inicio is not None else tarea["inicio"],
+                                       d or tarea["dir"])
         if g is not None and self.ocupados.get(g) == clave:
             del self.ocupados[g]
         tarea.update(estado="abierta", ganador=None, t_lim=None)
@@ -805,7 +906,7 @@ class Gestor:
         elif ev == "fin":
             tarea = self.tareas.get(clave)
             if tarea:
-                tarea.update(estado="completa", t_lim=None)
+                tarea.update(estado="completa", t_lim=None, t_fin=t)
             if self.ocupados.get(e) == clave:
                 del self.ocupados[e]
             self.evento[tipo] = True
@@ -817,6 +918,8 @@ class Gestor:
             if self.ocupados.get(e) == clave:
                 del self.ocupados[e]
         elif ev == "falla":
+            self.m.marcar("t_deteccion_falla", t)
+            self.m.marcar("t_respuesta_falla", t)
             self.fallados.add(e)
             otra = self.ocupados.pop(e, None)
             if tipo is not None:
@@ -827,6 +930,8 @@ class Gestor:
             self.impl[e] = tipo
             self.terminados.discard(e)
             self.evento[tipo] = True
+        elif ev == "reparado":   # M3 — el tractor remolcado ya se reparó
+            self.reincorporar(e)
         elif ev == "disponible":
             if e in self.ocupados and self.tareas.get(self.ocupados[e], {}).get("ganador") != e:
                 del self.ocupados[e]
@@ -840,9 +945,123 @@ class Gestor:
             self.evento["sembrar"] = True
 
     def _tiempos_limite(self, t):
-        for clave, tarea in self.tareas.items():
+        co = self.m.coordinador
+        for clave, tarea in list(self.tareas.items()):   # M3 puede abrir la siembra de una hilera aquí
             if tarea["estado"] in ("adjudicada", "en_curso") and tarea["t_lim"] is not None and t > tarea["t_lim"]:
+                if co is not None and tarea["ganador"] is not None:
+                    # M3 — el coordinador sabe mejor si el tractor sigue con esa hilera (latidos) o si falló
+                    sigue = co.sigue_con(tarea["ganador"], clave, t)
+                    if sigue is None:
+                        continue
+                    if sigue:
+                        tarea["t_lim"] = t + self._plazo(tarea["restantes"])
+                        continue
+                    if tarea["ganador"] == self.m.tractor_fallado and self.m.fallado_activo:
+                        self.m.marcar("t_deteccion_falla", t)
+                        self.m.marcar("t_respuesta_falla", t)
+                    self._reabrir_con_vista(clave, co._refinar_tarea)
+                    continue
+                if (tarea["ganador"] is not None and tarea["ganador"] == self.m.tractor_fallado
+                        and self.m.fallado_activo):
+                    self.m.marcar("t_deteccion_falla", t)
+                    self.m.marcar("t_respuesta_falla", t)
                 self._reabrir(clave)
+
+    def reabrir_celda(self, c, libre=None):
+        """M3 — una celda de una hilera que el gestor da por terminada sigue sin trabajar (la tapaba un
+        tractor descompuesto, o el coordinador la vio así desde arriba). Se vuelve a anunciar su hilera
+        desde esa celda. Devuelve los tipos reabiertos."""
+        campo = self.m.campo
+        x = c[0]
+        libre = campo.estado(c) == LIBRE if libre is None else libre
+        faltan = ["surcar", "sembrar"] if libre else ["sembrar"]
+        reabiertas = []
+        for tipo in faltan:
+            tarea = self.tareas.get((tipo, x))
+            if tarea is None or tarea["estado"] != "completa":
+                continue   # sigue abierta o en curso — quien la tenga pasará por ahí
+            col = campo.columnas[x]
+            d = tarea["dir"] or 1
+            resto = [v for v in col if (v[1] >= c[1] if d == 1 else v[1] <= c[1])]
+            tarea.update(estado="abierta", ganador=None, t_lim=None, inicio=list(c), dir=d,
+                         restantes=max(1, len(resto)))
+            self.reanuncios += 1
+            self.evento[tipo] = True
+            reabiertas.append(tipo)
+            self._reactivar(tipo)
+        return reabiertas
+
+    def _reactivar(self, tipo):
+        """Si todos los tractores de esa labor ya se habían dado por terminados, despierta a uno."""
+        vivos = [n for n, ti in self.impl.items() if ti == tipo and n not in self.fallados]
+        if not vivos or any(n not in self.terminados for n in vivos):
+            return
+        n = sorted(vivos)[0]
+        self.terminados.discard(n)
+        self.avisos_fin = 0
+        self.m.bus.enviar(self.m.t, "inform", GESTOR, n, {"evento": "reactivar", "tipo": tipo, "x": -1})
+
+    def reincorporar(self, nombre):
+        """M3 — el tractor reparado vuelve a recibir anuncios (lo avisa él o el coordinador)."""
+        tr = self.m.tractor(nombre)
+        tipo = TIPO[tr.implemento]
+        self.fallados.discard(nombre)
+        self.terminados.discard(nombre)
+        self.impl[nombre] = tipo
+        self.evento[tipo] = True
+
+    def _reabrir_otra(self, otra, nombre, refinar):
+        """La siguiente hilera que ya tenía adjudicada el tractor descompuesto (M3)."""
+        if otra is None or self.tareas.get(otra, {}).get("ganador") != nombre:
+            return
+        self._reabrir_con_vista(otra, refinar)
+
+    def _reabrir_con_vista(self, clave, refinar):
+        """M3 — antes de reabrir una hilera, el coordinador dice desde dónde (o que ya está terminada)."""
+        datos = refinar(clave) if refinar else None
+        if datos is not None and datos.get("completa"):
+            tipo, x = clave
+            self.tareas[clave].update(estado="completa", t_lim=None, t_fin=self.m.t)
+            if tipo == "surcar":
+                self._abrir_siembra(x, None, self.tareas[clave]["dir"] or 0)
+                self.tareas[("sembrar", x)]["completa_surco"] = True
+            self.evento[tipo] = True
+        elif datos is not None:
+            self._reabrir(clave, inicio=datos.get("siguiente"), restantes=datos.get("restantes"), d=datos.get("dir"))
+        else:
+            self._reabrir(clave)
+
+    def cerrar_por_falla(self, nombre, tipo, x, d, t=0, refinar=None):
+        """M3 — el coordinador vio que la hilera del tractor descompuesto ya quedó terminada."""
+        self.fallados.add(nombre)
+        otra = self.ocupados.pop(nombre, None)
+        clave = (tipo, x)
+        tarea = self.tareas.get(clave)
+        if tarea is not None and tarea["estado"] != "completa" and tarea["ganador"] in (nombre, None):
+            tarea.update(estado="completa", t_lim=None, t_fin=t)
+            if tipo == "surcar":
+                self._abrir_siembra(x, None, d or 0)
+                self.tareas[("sembrar", x)]["completa_surco"] = True
+            self.evento[tipo] = True
+        if otra != clave:
+            self._reabrir_otra(otra, nombre, refinar)
+
+    def reasignar_por_falla(self, nombre, info, refinar=None):
+        """M3 — el coordinador confirmó la falla; reabre solo lo que el tractor no alcanzó a hacer.
+
+        Devuelve (tipo, x, restantes) de la hilera reabierta, o None si no tenía trabajo."""
+        self.fallados.add(nombre)
+        otra = self.ocupados.pop(nombre, None)
+        tipo, x = info.get("tipo"), info.get("x")
+        clave = (tipo, x) if tipo is not None and x is not None and x >= 0 else None
+        out = None
+        tarea = self.tareas.get(clave) if clave else None
+        if tarea is not None and tarea["estado"] != "completa" and tarea["ganador"] in (nombre, None):
+            self._reabrir(clave, inicio=info.get("siguiente"), restantes=info.get("restantes"), d=info.get("dir"))
+            out = (tipo, x, info.get("restantes") or tarea["restantes"])
+        if otra != clave:
+            self._reabrir_otra(otra, nombre, refinar)
+        return out
 
     def _cfp(self, tipo, t):
         abiertas = [(k, v) for k, v in self.tareas.items() if k[0] == tipo and v["estado"] == "abierta"]

@@ -1,0 +1,9 @@
+t,hora,fuente,tipo,tractor,texto,motivo
+777,2.84,mundo,evento,,"T2 se descompone en [37, 8]",
+778,2.84,coordinador,decision,T2,T2 se descompuso; manda a un tractor por la grúa y revisará desde arriba lo que quedó pendiente antes de repartirlo,el tractor avisó que se descompuso (avisó dónde se quedó)
+778,2.84,coordinador,subasta,,"Subasta urgente para remolcar en [37, 8], invita a T1, T3, T4",
+780,2.85,coordinador,decision,T2,"Reparte solo lo que T2 no alcanzó a hacer (surcar, hilera 37, 38 celdas)",con lo que sabía del tractor y lo que vio desde arriba
+783,2.86,coordinador,decision,T3,"Subasta de remolcar, gana T3 con costo 107.6 (llega en 84 pasos, deja 20 celdas a medias, diésel 93 %, riesgo 0.00). Otras ofertas, T4 con costo 109.0 (llega en 103 pasos, deja 0 celdas a medias, diésel 88 %, riesgo 0.00); T1 con costo 131.6 (llega en 76 pasos, deja 34 celdas a medias, diésel 57 %, riesgo 0.00)",T3 llega 19 pasos antes que T4
+927,3.39,coordinador,aviso,T3,T3 dejó a T2 en la estación; empieza su reparación,
+960,3.51,coordinador,aviso,T3,T3 terminó la misión de remolcar y quedó libre,
+1201,4.39,coordinador,aviso,T2,T2 quedó reparado y vuelve a trabajar,
